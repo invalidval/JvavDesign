@@ -29,6 +29,7 @@ public class Client {
     public static void main(String[] args) {
         try {
             Client client = new Client("localhost", 8888);
+            client.sendMessage("LOGIN:用户名");
             BufferedReader consoleInput = new BufferedReader(new InputStreamReader(System.in));
 
             System.out.println("连接到服务器成功！请输入消息：");
