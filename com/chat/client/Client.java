@@ -46,6 +46,7 @@ public class Client implements MessageSubject {
     public static void main(String[] args) {
         try {
             Client client = new Client("localhost", 8888);
+            client.sendMessage("LOGIN:用户名");
             BufferedReader consoleInput = new BufferedReader(new InputStreamReader(System.in));
 
             // 控制台消息观察者
