@@ -1,0 +1,303 @@
+好的，根据文件要求，我将给出项目结构和类设计。
+
+**项目结构建议：**
+
+```
+ChatRoom/
+├── client/             # 客户端代码
+│   ├── core/           # 核心功能类
+│   │   ├── User.java
+│   │   ├── ChatWindow.java
+│   │   ├── Client.java   # 客户端主类，处理连接
+│   │   ├── Message.java  # 消息类
+│   │   ├── UserListUpdater.java # 更新用户列表
+│   │   ├── FileTransferManager.java # 文件传输
+│   │   ├── VoiceChatManager.java # 语音聊天
+│   │   └── GroupChatManager.java # 群组聊天
+│   ├── ui/             # 用户界面相关
+│   │   ├── LoginFrame.java
+│   │   ├── MainFrame.java
+│   │   ├── ChatPanel.java
+│   │   └── UserListPanel.java
+│   ├── utils/          # 工具类
+│   │   ├── IOUtils.java  # IO操作
+│   │   └── SwingUtils.java # Swing辅助
+│   └── resources/      # 资源文件（如图片）
+│
+├── server/             # 服务器端代码
+│   ├── core/           # 核心功能类
+│   │   ├── Server.java   # 服务器主类，处理连接
+│   │   ├── ClientHandler.java # 处理客户端连接的线程
+│   │   ├── UserManager.java   # 用户管理
+│   │   ├── GroupManager.java   # 群组管理
+│   │   ├── MessageStorage.java # 消息存储
+│   │   └── BroadcastManager.java # 广播消息
+│   └── utils/          # 工具类
+│       └── ServerUtils.java
+│
+├── common/             # 客户端和服务器共享的类
+│   └── Message.java      # 消息类（如果需要共享）
+│
+├── lib/                # 第三方库 (JAVE)
+│   └── JAVE.jar
+│
+├── docs/               # 文档
+│   ├── requirements.md # 需求文档
+│   ├── design.md       # 设计文档
+│   └── user_manual.md  # 用户手册
+│
+└── README.md
+```
+
+**类设计（至少8个）：**
+
+1.  **User (common/client/core):**
+    * 属性：用户ID，用户名，在线状态，IP地址，端口
+    * 方法：构造方法，getter/setter，`equals()`，`hashCode()`
+2.  **ChatWindow (client/core):**
+    * 属性：窗口ID，用户列表，消息显示区域，输入框
+    * 方法：显示消息，发送消息，添加用户，移除用户，关闭窗口
+3.  **Client (client/core):**
+    * 属性：Socket，输入输出流，用户，聊天窗口列表
+    * 方法：连接服务器，登录，发送消息，接收消息，处理用户列表更新，管理聊天窗口
+4.  **Server (server/core):**
+    * 属性：ServerSocket，客户端连接列表，用户列表
+    * 方法：启动服务器，监听连接，处理客户端连接，广播消息
+5.  **ClientHandler (server/core):**
+    * 属性：Socket，输入输出流，用户，服务器
+    * 方法：处理客户端请求，发送消息，接收消息，处理用户登录/登出
+6.  **Message (common/client/core):**
+    * 属性：发送者，接收者（群组或用户），内容，时间戳，消息类型（文本、文件、语音、图片）
+    * 方法：构造方法，getter/setter
+7.  **UserManager (server/core):**
+    * 属性：用户列表
+    * 方法：添加用户，删除用户，查找用户，更新用户状态，验证用户
+8.  **GroupManager (server/core):**
+    * 属性：群组列表，群组成员关系
+    * 方法：创建群组，添加成员，移除成员，发送群消息，管理小组
+
+**其他建议类（根据扩展功能添加）：**
+
+* **LoginFrame (client/ui):** 登录界面
+* **MainFrame (client/ui):** 主界面，包含用户列表和聊天窗口
+* **ChatPanel (client/ui):** 单个聊天窗口的UI
+* **UserListPanel (client/ui):** 用户列表UI
+* **FileTransferManager (client/core):** 文件传输管理
+* **VoiceChatManager (client/core):** 语音聊天管理
+* **MessageStorage (server/core):** 消息存储
+* **BroadcastManager (server/core):** 消息广播
+* **IOUtils (client/utils):** IO流工具类
+* **ServerUtils (server/utils):** 服务器工具类
+* **SwingUtils (client/utils):** Swing工具类
+
+**类图（简化版，展示主要类之间的关系）：**
+
+```
++-----------------+       +---------------------+       +-----------------+
+|      User       |------>|     Message       |       |    Server     |
++-----------------+       +---------------------+       +-----------------+
+|  userId: int   |       |  sender: User      |<------|  serverSocket   |
+|  username: String|       |  receiver: String |       |  clients: List  |
+|  online: boolean|       |  content: String  |       |  userManager: UM|
++-----------------+       |  timestamp: Date  |       +-----------------+
+|  getters/setters|       +---------------------+       |  start()        |
+|  equals()       |                                   |  listen()       |
+|  hashCode()     |                                   |  broadcast()    |
++-----------------+                                   +-----------------+
+       ^                                                ^
+       |                                                |
++-----------------+       +---------------------+       +---------------------+
+|     Client      |       |    ChatWindow     |       |    ClientHandler    |
++-----------------+       +---------------------+       +---------------------+
+|  socket: Socket|       |  windowId: int    |       |  socket: Socket    |
+|  in: InputStream|       |  userList: List   |       |  user: User        |
+|  out: OutputStream|       |  messageArea: TextArea|       |  server: Server    |
+|  user: User    |       |  inputField: TextField|       +---------------------+
+|  chatWindows:List|       +---------------------+       |  run()             |
++-----------------+       |  displayMessage()  |       |  handleClient()   |
+|  connect()      |       |  sendMessage()     |       +---------------------+
+|  login()        |       |  addUser()         |
+|  sendMessage()  |       |  removeUser()      |       +-----------------+
+|  receiveMessage()|       |  closeWindow()     |       |   UserManager   |
+|  updateUserList()|       +---------------------+       +-----------------+
++-----------------+                                   |  users: List    |
+                                                      +-----------------+
+                                                      |  addUser()      |
+                                                      |  removeUser()   |
+                                                      |  findUser()     |
+                                                      |  updateStatus() |
+                                                      +-----------------+
+```
+
+**说明：**
+
+* 这个类图是简化的，只展示了主要类和它们之间的关键关系。实际开发中可能需要更多的类和更复杂的类图。
+* 箭头表示关联关系，例如 `Client` 类有一个 `User` 类型的成员变量。
+* `UserManager` 和 `GroupManager` 等类负责管理用户和群组数据，提高代码的模块化和可维护性。
+* 根据具体需求和设计选择，可以对类进行进一步的细化和调整。
+
+这个设计方案满足了项目需求，并考虑到了可扩展性。希望对您有所帮助！-
+
+
+
+好的，我将根据项目需求，给出类设计图、系统顺序图和活动图。
+
+**1. 类设计图（UML类图）：**
+
+由于文本难以完美呈现图形，我将以文字方式更详细地描述类及其关系，并尽可能模拟类图的结构。您可以使用UML工具（如PlantUML, draw.io, Visio等）根据以下描述绘制更直观的图。
+
+```
++-----------------+
+|      User       |
++-----------------+
+|  userId: int   |
+|  username: String|
+|  online: boolean|
+|  IPAddress: String|
+|  port: int     |
++-----------------+
+|  getters/setters|
+|  equals()       |
+|  hashCode()     |
++-----------------+
+       ^
+       | 1..*
++-----------------+       +---------------------+       +-----------------+
+|     Client      |------>|     Message       |       |    Server     |
++-----------------+       +---------------------+       +-----------------+
+|  socket: Socket|       |  sender: User      |<------|  serverSocket   |
+|  in: InputStream|       |  receiver: String  |       |  clients: List<ClientHandler>|
+|  out: OutputStream|       |  content: String  |       |  userManager: UserManager|
+|  user: User    |       |  timestamp: Date  |       |  groupManager: GroupManager|
+|  chatWindows:List<ChatWindow>|       |  type: MessageType|       |  messageStorage: MessageStorage|
++-----------------+       +---------------------+       +-----------------+
+|  connect()      |       |  getters/setters|       |  start()        |
+|  login()        |       +---------------------+       |  listen()       |
+|  sendMessage()  |                                   |  broadcast()    |
+|  receiveMessage()|                                   +-----------------+
+|  updateUserList()|                                   |  + ClientHandler    |
++-----------------+                                   |  +-----------------+
+       1                                            |  |  socket: Socket    |
++-----------------+       +---------------------+       |  |  in: InputStream|
+|    ChatWindow     |       |   MessageType     |       |  |  out: OutputStream|
++-----------------+       +---------------------+       |  |  user: User        |
+|  windowId: int    |       |  TEXT             |       |  |  server: Server    |
+|  userList: List<User>|       |  FILE             |       |  +-----------------+
+|  messageArea: TextArea|       |  VOICE            |       |  |  run()             |
+|  inputField: TextField|       |  IMAGE            |       |  |  handleClient()   |
++-----------------+       +---------------------+       |  +-----------------+
+|  displayMessage()  |                                   |         ^
+|  sendMessage()     |       +-----------------+       |         | 1..*
+|  addUser()         |       |   UserManager   |       +-----------------+
+|  removeUser()      |       +-----------------+       |   GroupManager  |
+|  closeWindow()     |       |  users: Map<Integer, User>|       +-----------------+
++-----------------+       +-----------------+       |  groups: Map<String, Group>|
+                                                      |  groupMembers: Map<String, List<User>>|
+                                                      +-----------------+
+                                                      |  createGroup()  |
+                                                      |  addMember()    |
+                                                      |  removeMember() |
+                                                      |  getGroupMembers()|
+                                                      +-----------------+
+
++-----------------+
+| MessageStorage  |
++-----------------+
+|  messages: Map<String, List<Message>>| // UserID -> Messages
++-----------------+
+|  saveMessage()   |
+|  loadMessages()  |
++-----------------+
+```
+
+**类图说明：**
+
+* **User:** 存储用户信息。
+* **Client:** 客户端类，处理与服务器的连接，管理聊天窗口。
+* **Message:** 消息类，包含发送者、接收者、内容等。
+* **Server:** 服务器类，监听连接，管理客户端。
+* **ClientHandler:** 服务器为每个客户端创建的处理线程。
+* **ChatWindow:** 聊天窗口类。
+* **MessageType:** 枚举类型，定义消息类型（文本、文件等）。
+* **UserManager:** 用户管理类。
+* **GroupManager:** 群组管理类。
+* **MessageStorage:** 消息存储类。
+
+**2. 系统顺序图：**
+
+这里提供两个关键场景的顺序图：用户登录和发送消息。
+
+**2.1 用户登录顺序图:**
+
+```
+参与者: Client, Server, ClientHandler, UserManager
+
+Client->Server:connect(host, port)
+Server->ClientHandler:new ClientHandler(socket)
+Client->Server:send(loginRequest(username, password))
+Server->ClientHandler:receive(loginRequest)
+ClientHandler->UserManager:verifyUser(username, password)
+UserManager->ClientHandler:return(user)
+ClientHandler->Client:send(loginResponse(success/failure, user))
+Client->Client:process(loginResponse)
+alt successful login
+    Client->Client:displayMainFrame()
+else failed login
+    Client->Client:displayError()
+end
+```
+
+**2.2 发送消息顺序图:**
+
+```
+参与者: Client, Server, ClientHandler, BroadcastManager (假设有)
+
+Client->ChatWindow:inputMessage(content)
+ChatWindow->Client:sendMessage(message)
+Client->Server:send(message)
+Server->ClientHandler:receive(message)
+ClientHandler->BroadcastManager:broadcast(message)  // 如果有广播管理器
+loop for all connected ClientHandlers
+    BroadcastManager->ClientHandler:send(message)
+    ClientHandler->Client:send(message)
+    Client->ChatWindow:displayMessage(message)
+end
+```
+
+**3. 活动图：**
+
+提供一个“用户发送消息”的活动图。
+
+**3.1 用户发送消息活动图:**
+
+```
+[Start] --> (用户在聊天窗口输入消息)
+(用户在聊天窗口输入消息) --> [发送消息按钮被点击]
+[发送消息按钮被点击] --> (Client调用sendMessage())
+(Client调用sendMessage()) --> [Client通过Socket发送消息到Server]
+[Client通过Socket发送消息到Server] --> (Server的ClientHandler接收消息)
+(Server的ClientHandler接收消息) --> [Server处理消息 (例如，广播)]
+[Server处理消息 (例如，广播)] --> loop 每位接收者ClientHandler
+    loop 每位接收者ClientHandler --> [Server向接收者Client发送消息]
+    [Server向接收者Client发送消息] --> (Client的receiveMessage()处理消息)
+    (Client的receiveMessage()处理消息) --> [Client在ChatWindow显示消息]
+end loop
+[Client在ChatWindow显示消息] --> [End]
+```
+
+**活动图说明：**
+
+* 方括号 `[]` 表示动作。
+* 圆括号 `()` 表示程序内部的处理或调用。
+* 菱形表示决策点（例如，消息是否需要广播）。
+* `loop` 表示循环。
+* `[Start]` 和 `[End]` 表示活动的开始和结束。
+
+**重要说明：**
+
+* 这些图是简化版本，旨在说明核心流程和类之间的交互。
+* 实际开发中，可能需要更详细的图来覆盖所有功能和异常情况。
+* UML工具可以帮助您更方便地绘制和修改这些图。
+* 请根据您的具体需求和设计选择，对这些图进行调整和完善。
+
+希望这些图能够帮助您更好地理解和实现项目！
