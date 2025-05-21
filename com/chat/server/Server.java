@@ -4,6 +4,7 @@ import java.io.*;
 import java.net.*;
 import java.util.Properties;
 import java.util.concurrent.*;
+import com.chat.server.UserDatabase;
 
 public class Server {
     private static final int PORT = 8888;
@@ -22,6 +23,8 @@ public class Server {
             System.out.println("加载线程池配置失败，使用默认配置");
             threadPool = Executors.newFixedThreadPool(10);
         }
+
+        UserDatabase.initialize(); // 初始化用户数据库
     }
 
     public static void main(String[] args) throws IOException {
@@ -57,5 +60,10 @@ public class Server {
                 senderHandler.send("用户 " + receiver + " 不在线或不存在。");
             }
         }
+    }
+
+    // 可扩展的消息分发接口
+    public interface MessageDispatcher {
+        void dispatch(String msg);
     }
 }

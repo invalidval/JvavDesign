@@ -8,6 +8,7 @@ public class Message {
     private boolean isGroup;
     private MessageType type; // 消息类型：文本、文件、图片等
     private String filePath;  // 文件路径（仅文件消息使用）
+    private MessageSendStrategy sendStrategy;
 
     // 文本消息构造函数
     public Message(String sender, String receiver, String content, boolean isGroup) {
@@ -57,7 +58,22 @@ public class Message {
         return filePath;
     }
 
+    public void setSendStrategy(MessageSendStrategy strategy) {
+        this.sendStrategy = strategy;
+    }
+
+    public void send() {
+        if (sendStrategy != null) {
+            sendStrategy.send(this);
+        }
+    }
+
     public enum MessageType {
         TEXT, FILE, IMAGE, PRIVATE // 新增私聊消息类型
+    }
+
+    // 策略模式接口
+    public interface MessageSendStrategy {
+        void send(Message message);
     }
 }
