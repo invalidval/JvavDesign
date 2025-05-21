@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <users>
-    <user name="3" password="1"/>
+    <user name="1" password="1"/>
+    <user name="3" password="1">
+        <friend>3</friend>
+    </user>
 </users>

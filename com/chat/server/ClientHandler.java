@@ -54,7 +54,8 @@ public class ClientHandler implements Runnable {
                     }
                     String username = parts[1];
                     String password = parts[2];
-                    if (UserDatabase.loginUser(username, password)) {
+                    int loginStatus = UserDatabase.loginUser(username, password);
+                    if (loginStatus == UserDatabase.LOGIN_SUCCESS) {
                         this.username = username;
                         Server.addClient(username, this);
                         loggedIn = true;
@@ -64,16 +65,29 @@ public class ClientHandler implements Runnable {
                         out.println("/f —— 查看好友列表");
                         out.println("/p 用户名 消息内容 —— 私聊");
                         out.println("直接输入内容为群聊消息");
+                    } else if (loginStatus == UserDatabase.LOGIN_ALREADY_ONLINE) {
+                        out.println("ERROR: 该用户已在线，不允许重复登录。");
+                    } else if (loginStatus == UserDatabase.LOGIN_PASSWORD_ERROR) {
+                        out.println("ERROR: 密码错误，请重试。");
+                    } else if (loginStatus == UserDatabase.LOGIN_USER_NOT_FOUND) {
+                        out.println("ERROR: 用户不存在，请先注册。");
                     } else {
-                        out.println("ERROR: 用户名或密码错误，请重试。");
+                        out.println("ERROR: 登录失败。");
                     }
                 } else {
+                    // 未登录时，所有非注册/登录命令都直接提示，不做任何数据库操作
                     out.println("请先注册或登录！");
                 }
             }
 
+            // 只有登录后才允许执行其他命令
             String message;
             while ((message = in.readLine()) != null) {
+                if (username == null) {
+                    // 理论上不会到这里，但保险起见
+                    out.println("请先注册或登录！");
+                    continue;
+                }
                 String command = message.startsWith("/") ? message.split("\\s+")[0].toUpperCase() : "DEFAULT";
                 MessageHandlerStrategy strategy = handlerStrategies.getOrDefault(command, handlerStrategies.get("DEFAULT"));
                 strategy.handle(message, this);

@@ -48,6 +48,7 @@ public class Server {
 
     public static void removeClient(String name) {
         clients.remove(name);
+        UserDatabase.logoutUser(name); // 确保下线状态同步
     }
 
     public static void sendPrivateMessage(String sender, String receiver, String message) {

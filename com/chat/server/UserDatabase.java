@@ -1,7 +1,6 @@
 package com.chat.server;
 
 import com.chat.model.User;
-
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -14,12 +13,17 @@ import org.w3c.dom.*;
 
 public class UserDatabase {
     private static ConcurrentHashMap<String, User> users = new ConcurrentHashMap<>();
-    private static ConcurrentHashMap<String, String> passwords = new ConcurrentHashMap<>(); // 存储用户名和密码
+    private static ConcurrentHashMap<String, String> passwords = new ConcurrentHashMap<>();
     private static Set<UserDatabaseObserver> observers = new CopyOnWriteArraySet<>();
     private static final String USER_FILE = "users.xml";
 
+    // 登录状态码
+    public static final int LOGIN_SUCCESS = 0;
+    public static final int LOGIN_USER_NOT_FOUND = 1;
+    public static final int LOGIN_PASSWORD_ERROR = 2;
+    public static final int LOGIN_ALREADY_ONLINE = 3;
+
     public static void initialize() {
-        // 从XML文件加载用户信息
         File file = new File(USER_FILE);
         if (!file.exists()) return;
         try {
@@ -32,8 +36,7 @@ public class UserDatabase {
                 String username = userElem.getAttribute("name");
                 String password = userElem.getAttribute("password");
                 User user = new User(username);
-                user.setOnline(false);
-                // 读取好友
+                user.setOnline(false); // 启动时全部设为离线
                 NodeList friendNodes = userElem.getElementsByTagName("friend");
                 for (int j = 0; j < friendNodes.getLength(); j++) {
                     Element friendElem = (Element) friendNodes.item(j);
@@ -66,7 +69,7 @@ public class UserDatabase {
             return false;
         }
         User user = new User(username);
-        user.setOnline(false); // 注册时默认离线，便于后续登录
+        user.setOnline(false);
         users.put(username, user);
         passwords.put(username, password);
         saveUsersToFile();
@@ -74,15 +77,37 @@ public class UserDatabase {
         return true;
     }
 
-    public static boolean loginUser(String username, String password) {
+    public static int loginUser(String username, String password) {
         User user = users.get(username);
         String storedPassword = passwords.get(username);
-        if (user != null && storedPassword != null && storedPassword.equals(password) && !user.isOnline()) {
-            user.setOnline(true);
-            saveUsersToFile();
-            return true;
+        if (user == null || storedPassword == null) {
+            return LOGIN_USER_NOT_FOUND;
         }
-        return false;
+        if (!storedPassword.equals(password)) {
+            return LOGIN_PASSWORD_ERROR;
+        }
+        if (user.isOnline()) {
+            return LOGIN_ALREADY_ONLINE;
+        }
+        user.setOnline(true);
+        saveUsersToFile();
+        return LOGIN_SUCCESS;
+    }
+
+    // 新增：下线方法
+    public static void logoutUser(String username) {
+        User user = users.get(username);
+        if (user != null && user.isOnline()) {
+            user.setOnline(false);
+            saveUsersToFile();
+            notifyObservers(user);
+        }
+    }
+
+    // 新增：判断用户是否在线
+    public static boolean isOnline(String username) {
+        User user = users.get(username);
+        return user != null && user.isOnline();
     }
 
     public static User getUser(String username) {
@@ -114,7 +139,6 @@ public class UserDatabase {
                 Element userElem = doc.createElement("user");
                 userElem.setAttribute("name", username);
                 userElem.setAttribute("password", passwords.get(username));
-                // 保存好友
                 User user = users.get(username);
                 for (String friend : user.getFriends()) {
                     Element friendElem = doc.createElement("friend");
@@ -132,7 +156,6 @@ public class UserDatabase {
         }
     }
 
-    // 观察者模式接口
     public interface UserDatabaseObserver {
         void onUserChanged(User user);
     }
