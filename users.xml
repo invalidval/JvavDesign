@@ -1,10 +1,20 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <users>
     <user name="1" password="1">
-        <friend>3</friend>
-    </user>
-    <user name="3" password="1">
         <friend>1</friend>
-        <friend>3</friend>
+        <friend>64</friend>
+    </user>
+    <user name="bob" password="securepass">
+        <friend>alice</friend>
+    </user>
+    <user name="alice" password="password123">
+        <friend>bob</friend>
+        <friend>charlie</friend>
+    </user>
+    <user name="64" password="64">
+        <friend>1</friend>
+    </user>
+    <user name="charlie" password="mypassword">
+        <friend>alice</friend>
     </user>
 </users>

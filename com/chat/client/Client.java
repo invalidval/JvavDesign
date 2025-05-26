@@ -46,20 +46,20 @@ public class Client implements MessageSubject {
     public static void main(String[] args) {
         try {
             Client client = new Client("localhost", 8888);
-            client.sendMessage("LOGIN:用户名");
+//            client.sendMessage("LOGIN:用户名");
             BufferedReader consoleInput = new BufferedReader(new InputStreamReader(System.in));
 
             // 控制台消息观察者
             client.addObserver(new ConsoleMessageObserver());
 
-            System.out.println("> Loaded");
-            System.out.println("使用说明：");
-            System.out.println("/r 用户名 密码    —— 注册");
-            System.out.println("/l 用户名 密码    —— 登录");
-            System.out.println("/a 好友用户名     —— 添加好友");
-            System.out.println("/f           —— 查看好友列表");
-            System.out.println("/p 用户名 消息内容 —— 私聊");
-            System.out.println("直接输入内容为群聊消息");
+//            System.out.println("> Loaded");
+//            System.out.println("使用说明：");
+//            System.out.println("/r 用户名 密码    —— 注册");
+//            System.out.println("/l 用户名 密码    —— 登录");
+//            System.out.println("/a 好友用户名     —— 添加好友");
+//            System.out.println("/f           —— 查看好友列表");
+//            System.out.println("/p 用户名 消息内容 —— 私聊");
+//            System.out.println("直接输入内容为群聊消息");
 
             boolean loggedIn = false;
 

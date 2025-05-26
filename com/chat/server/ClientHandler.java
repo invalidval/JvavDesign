@@ -32,6 +32,7 @@ public class ClientHandler implements Runnable {
         try {
             while (!loggedIn) {
                 String initialMessage = in.readLine();
+
                 if (initialMessage == null) break;
                 if (initialMessage.startsWith("/r")) {
                     String[] parts = initialMessage.trim().split("\\s+");
@@ -93,7 +94,7 @@ public class ClientHandler implements Runnable {
                 strategy.handle(message, this);
             }
         } catch (IOException e) {
-            System.out.println(username + " 已断开连接");
+            out.println(username + " 已断开连接");
         } finally {
             if (username != null) {
                 Server.removeClient(username);
@@ -120,14 +121,13 @@ public class ClientHandler implements Runnable {
     // 各种消息处理策略实现
     class GetFriendsHandler implements MessageHandlerStrategy {
         public void handle(String message, ClientHandler handler) {
-            // 现在 /f 不需要参数
             if (username == null) {
                 handler.send("ERROR: 未登录");
                 return;
             }
             User currentUser = UserDatabase.getUser(username);
             if (currentUser != null) {
-                handler.send(String.join(",", currentUser.getFriends()));
+                handler.send("FRIENDS:" + String.join(",", currentUser.getFriends())); // 添加 FRIENDS: 标识符
             } else {
                 handler.send("ERROR: 用户不存在");
             }
