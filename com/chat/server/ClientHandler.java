@@ -3,9 +3,12 @@ package com.chat.server;
 import java.io.*;
 import java.net.Socket;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import com.chat.model.User;
 import com.chat.server.UserDatabase;
+import com.chat.server.GroupDatabase;
 
 public class ClientHandler implements Runnable {
     private Socket socket;
@@ -23,6 +26,11 @@ public class ClientHandler implements Runnable {
         handlerStrategies.put("/F", new GetFriendsHandler());
         handlerStrategies.put("/A", new AddFriendHandler());
         handlerStrategies.put("/P", new PrivateMessageHandler());
+        handlerStrategies.put("/D", new DeleteFriendHandler());
+        handlerStrategies.put("/CG", new CreateGroupHandler()); // 新增
+        handlerStrategies.put("/GLIST", new GroupListHandler()); // 新增
+        handlerStrategies.put("/GS", new GroupSendHandler()); // 新增
+        handlerStrategies.put("/ONLINE", new OnlineStatusHandler()); // 新增
         handlerStrategies.put("DEFAULT", new DefaultMessageHandler());
     }
 
@@ -61,11 +69,7 @@ public class ClientHandler implements Runnable {
                         Server.addClient(username, this);
                         loggedIn = true;
                         out.println("SUCCESS: 登录成功！您可以开始聊天了。");
-                        out.println("使用说明：");
-                        out.println("/a 好友用户名 —— 添加好友");
-                        out.println("/f —— 查看好友列表");
-                        out.println("/p 用户名 消息内容 —— 私聊");
-                        out.println("直接输入内容为群聊消息");
+
                     } else if (loginStatus == UserDatabase.LOGIN_ALREADY_ONLINE) {
                         out.println("ERROR: 该用户已在线，不允许重复登录。");
                     } else if (loginStatus == UserDatabase.LOGIN_PASSWORD_ERROR) {
@@ -145,6 +149,11 @@ public class ClientHandler implements Runnable {
             User currentUser = UserDatabase.getUser(username);
             if (currentUser != null && UserDatabase.addFriend(username, friendName)) {
                 handler.send("SUCCESS: 好友添加成功");
+                // 主动通知被加方刷新好友列表
+                ClientHandler friendHandler = Server.getClientHandler(friendName);
+                if (friendHandler != null) {
+                    friendHandler.send("FRIENDS:" + String.join(",", UserDatabase.getUser(friendName).getFriends()));
+                }
             } else {
                 handler.send("ERROR: 添加好友失败");
             }
@@ -161,6 +170,97 @@ public class ClientHandler implements Runnable {
             String targetUser = parts[1];
             String privateMessage = parts[2];
             Server.sendPrivateMessage(username, targetUser, privateMessage);
+        }
+    }
+
+    class DeleteFriendHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            String[] parts = message.trim().split("\\s+");
+            if (parts.length < 2) {
+                handler.send("ERROR: 格式为 /d 好友用户名");
+                return;
+            }
+            String friendName = parts[1];
+            User currentUser = UserDatabase.getUser(username);
+            if (currentUser != null && UserDatabase.deleteFriend(username, friendName)) {
+                handler.send("SUCCESS: 好友删除成功");
+            } else {
+                handler.send("ERROR: 删除好友失败");
+            }
+        }
+    }
+
+    // 创建群聊
+    class CreateGroupHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            String[] parts = message.trim().split("\\s+");
+            if (parts.length < 3) {
+                handler.send("ERROR: 格式为 /cg 群名 成员1 成员2 ...");
+                return;
+            }
+            String groupName = parts[1];
+            Set<String> members = new HashSet<>();
+            members.add(username);
+            for (int i = 2; i < parts.length; i++) {
+                if (!parts[i].equals(username)) members.add(parts[i]);
+            }
+            boolean ok = GroupDatabase.createGroup(groupName, members);
+            if (ok) {
+                handler.send("SUCCESS: 创建群聊成功");
+                // 主动通知所有被拉入群聊的在线成员刷新群聊列表
+                for (String member : members) {
+                    if (!member.equals(username)) {
+                        ClientHandler memberHandler = Server.getClientHandler(member);
+                        if (memberHandler != null) {
+                            Set<String> groups = GroupDatabase.getGroupsOfUser(member);
+                            memberHandler.send("GROUPS:" + String.join(",", groups));
+                        }
+                    }
+                }
+            } else {
+                handler.send("ERROR: 群聊已存在或成员无效");
+            }
+        }
+    }
+
+    // 获取自己所在群
+    class GroupListHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            Set<String> groups = GroupDatabase.getGroupsOfUser(username);
+            handler.send("GROUPS:" + String.join(",", groups));
+        }
+    }
+
+    // 群聊消息发送
+    class GroupSendHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            String[] parts = message.trim().split("\\s+", 3);
+            if (parts.length < 3) {
+                handler.send("ERROR: 格式为 /gs 群名 消息内容");
+                return;
+            }
+            String groupName = parts[1];
+            String msg = parts[2];
+            if (!GroupDatabase.isUserInGroup(groupName, username)) {
+                handler.send("ERROR: 你不在该群聊中");
+                return;
+            }
+            GroupDatabase.sendGroupMessage(groupName, username, msg);
+        }
+    }
+
+    // 在线状态查询
+    class OnlineStatusHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            String[] parts = message.trim().split("\\s+");
+            Set<String> onlineUsers = new HashSet<>();
+            for (int i = 1; i < parts.length; i++) {
+                String user = parts[i];
+                if (Server.getClientHandler(user) != null) {
+                    onlineUsers.add(user);
+                }
+            }
+            handler.send("ONLINE:" + String.join(",", onlineUsers));
         }
     }
 

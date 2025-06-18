@@ -91,6 +91,8 @@ public class UserDatabase {
         }
         user.setOnline(true);
         saveUsersToFile();
+        // 主动通知所有在线好友该用户上线
+        notifyFriendsStatusChange(username, true);
         return LOGIN_SUCCESS;
     }
 
@@ -101,6 +103,20 @@ public class UserDatabase {
             user.setOnline(false);
             saveUsersToFile();
             notifyObservers(user);
+            // 主动通知所有在线好友该用户下线
+            notifyFriendsStatusChange(username, false);
+        }
+    }
+
+    // 主动通知所有在线好友该用户上线/下线
+    private static void notifyFriendsStatusChange(String username, boolean online) {
+        User user = users.get(username);
+        if (user == null) return;
+        for (String friend : user.getFriends()) {
+            com.chat.server.ClientHandler handler = com.chat.server.Server.getClientHandler(friend);
+            if (handler != null) {
+                handler.send("STATUS:" + username + ":" + (online ? "online" : "offline"));
+            }
         }
     }
 
@@ -123,6 +139,18 @@ public class UserDatabase {
             saveUsersToFile();
             notifyObservers(user);
             notifyObservers(friend);
+            return true;
+        }
+        return false;
+    }
+
+    public static boolean deleteFriend(String username, String friendName) {
+        User user = getUser(username);
+        User friend = getUser(friendName);
+        if (user != null && friend != null && user.getFriends().contains(friendName)) {
+            user.getFriends().remove(friendName);
+            friend.getFriends().remove(username);
+            saveUsersToFile(); // 持久化
             return true;
         }
         return false;

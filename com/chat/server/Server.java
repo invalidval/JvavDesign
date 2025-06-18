@@ -3,8 +3,10 @@ package com.chat.server;
 import java.io.*;
 import java.net.*;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.*;
 import com.chat.server.UserDatabase;
+import com.chat.server.GroupDatabase;
 
 public class Server {
     private static final int PORT = 8888;
@@ -25,6 +27,7 @@ public class Server {
         }
 
         UserDatabase.initialize(); // 初始化用户数据库
+        GroupDatabase.initialize(); // 初始化群聊数据库
     }
 
     public static void main(String[] args) throws IOException {
@@ -59,6 +62,22 @@ public class Server {
             ClientHandler senderHandler = clients.get(sender);
             if (senderHandler != null) {
                 senderHandler.send("用户 " + receiver + " 不在线或不存在。");
+            }
+        }
+    }
+
+    public static ClientHandler getClientHandler(String name) {
+        return clients.get(name);
+    }
+
+    // 群聊消息分发
+    public static void sendGroupMessage(String groupName, String sender, String message) {
+        Set<String> members = GroupDatabase.getGroupMembers(groupName);
+        if (members == null) return;
+        for (String member : members) {
+            ClientHandler handler = clients.get(member);
+            if (handler != null) {
+                handler.send("[群聊] " + groupName + "|" + sender + ": " + message);
             }
         }
     }
