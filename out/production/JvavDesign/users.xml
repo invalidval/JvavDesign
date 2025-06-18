@@ -4,6 +4,7 @@
         <friend>3</friend>
         <friend>64</friend>
     </user>
+    <user name="user2" password="pass2"/>
     <user name="2" password="1"/>
     <user name="3" password="3">
         <friend>1</friend>
@@ -15,6 +16,7 @@
         <friend>bob</friend>
         <friend>charlie</friend>
     </user>
+    <user name="testuser" password="testpass"/>
     <user name="64" password="64">
         <friend>1</friend>
     </user>

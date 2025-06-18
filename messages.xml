@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<messages>
+          
+  
+  
+  
+  <message id="1" receiver="" sender="testuser" timestamp="2025-06-19 00:12:41" type="GROUP">
+                    
+    
+    
+    
+    <content>这是第一条测试消息</content>
+                  
+  
+  
+  
+  </message>
+        
+  
+  
+  
+  <message id="2" receiver="" sender="testuser" timestamp="2025-06-19 00:12:50" type="GROUP">
+                
+    
+    
+    <content>这是第二条测试消息</content>
+              
+  
+  
+  </message>
+      
+  
+  
+  <message id="3" receiver="" sender="testuser" timestamp="2025-06-19 00:14:36" type="GROUP">
+            
+    
+    <content>我是第二个设备，测试漫游功能</content>
+          
+  
+  </message>
+    
+  
+  <message id="4" receiver="user2" sender="testuser" timestamp="2025-06-19 00:15:55" type="PRIVATE">
+        
+    <content>你好user2，这是私聊消息</content>
+      
+  </message>
+  
+  <message id="5" receiver="testuser" sender="user2" timestamp="2025-06-19 00:16:15" type="PRIVATE">
+    <content>你好testuser，我收到了你的消息</content>
+  </message>
+</messages>
