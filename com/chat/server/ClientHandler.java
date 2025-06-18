@@ -9,6 +9,7 @@ import java.util.Set;
 import com.chat.model.User;
 import com.chat.server.UserDatabase;
 import com.chat.server.GroupDatabase;
+import com.chat.server.MessageStorage;
 
 public class ClientHandler implements Runnable {
     private Socket socket;
@@ -31,6 +32,7 @@ public class ClientHandler implements Runnable {
         handlerStrategies.put("/GLIST", new GroupListHandler()); // 新增
         handlerStrategies.put("/GS", new GroupSendHandler()); // 新增
         handlerStrategies.put("/ONLINE", new OnlineStatusHandler()); // 新增
+        handlerStrategies.put("/H", new HistoryMessageHandler()); // 历史消息查询
         handlerStrategies.put("DEFAULT", new DefaultMessageHandler());
     }
 
@@ -41,7 +43,8 @@ public class ClientHandler implements Runnable {
             while (!loggedIn) {
                 String initialMessage = in.readLine();
 
-                if (initialMessage == null) break;
+                if (initialMessage == null)
+                    break;
                 if (initialMessage.startsWith("/r")) {
                     String[] parts = initialMessage.trim().split("\\s+");
                     if (parts.length < 3) {
@@ -70,6 +73,9 @@ public class ClientHandler implements Runnable {
                         loggedIn = true;
                         out.println("SUCCESS: 登录成功！您可以开始聊天了。");
 
+                        // 显示最近的消息记录
+                        showRecentMessagesOnLogin();
+
                     } else if (loginStatus == UserDatabase.LOGIN_ALREADY_ONLINE) {
                         out.println("ERROR: 该用户已在线，不允许重复登录。");
                     } else if (loginStatus == UserDatabase.LOGIN_PASSWORD_ERROR) {
@@ -94,7 +100,8 @@ public class ClientHandler implements Runnable {
                     continue;
                 }
                 String command = message.startsWith("/") ? message.split("\\s+")[0].toUpperCase() : "DEFAULT";
-                MessageHandlerStrategy strategy = handlerStrategies.getOrDefault(command, handlerStrategies.get("DEFAULT"));
+                MessageHandlerStrategy strategy = handlerStrategies.getOrDefault(command,
+                        handlerStrategies.get("DEFAULT"));
                 strategy.handle(message, this);
             }
         } catch (IOException e) {
@@ -114,6 +121,39 @@ public class ClientHandler implements Runnable {
     public void send(String message) {
         synchronized (out) { // 确保输出流的线程安全
             out.println(message);
+        }
+    }
+
+    /**
+     * 强制断开客户端连接
+     */
+    public void forceDisconnect() {
+        try {
+            if (username != null) {
+                User user = UserDatabase.getUser(username);
+                if (user != null) {
+                    user.setOnline(false);
+                }
+                Server.removeClient(username);
+            }
+            socket.close();
+        } catch (IOException e) {
+            System.out.println("强制断开连接时发生错误: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 登录时显示最近的消息记录
+     */
+    private void showRecentMessagesOnLogin() {
+        var messages = MessageStorage.getUserMessages(username, 5); // 显示最近5条消息
+        if (!messages.isEmpty()) {
+            out.println("=== 最近消息记录 ===");
+            // 按时间正序显示（最早的在前）
+            for (int i = messages.size() - 1; i >= 0; i--) {
+                out.println(messages.get(i).toString());
+            }
+            out.println("==================");
         }
     }
 
@@ -169,6 +209,10 @@ public class ClientHandler implements Runnable {
             }
             String targetUser = parts[1];
             String privateMessage = parts[2];
+
+            // 保存私聊消息到存储
+            MessageStorage.saveMessage(username, targetUser, privateMessage, MessageStorage.MessageType.PRIVATE);
+
             Server.sendPrivateMessage(username, targetUser, privateMessage);
         }
     }
@@ -202,7 +246,8 @@ public class ClientHandler implements Runnable {
             Set<String> members = new HashSet<>();
             members.add(username);
             for (int i = 2; i < parts.length; i++) {
-                if (!parts[i].equals(username)) members.add(parts[i]);
+                if (!parts[i].equals(username))
+                    members.add(parts[i]);
             }
             boolean ok = GroupDatabase.createGroup(groupName, members);
             if (ok) {
@@ -264,11 +309,92 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    class HistoryMessageHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            if (username == null) {
+                handler.send("ERROR: 未登录");
+                return;
+            }
+
+            String[] parts = message.trim().split("\\s+");
+
+            if (parts.length == 1) {
+                // /h - 查看最近20条消息
+                showRecentMessages(handler, 20);
+            } else if (parts.length == 2) {
+                try {
+                    // /h 数字 - 查看指定数量的消息
+                    int count = Integer.parseInt(parts[1]);
+                    if (count > 0 && count <= 100) {
+                        showRecentMessages(handler, count);
+                    } else {
+                        handler.send("ERROR: 消息数量应在1-100之间");
+                    }
+                } catch (NumberFormatException e) {
+                    // /h 用户名 - 查看与指定用户的私聊记录
+                    String targetUser = parts[1];
+                    showPrivateMessages(handler, targetUser, 20);
+                }
+            } else if (parts.length == 3) {
+                // /h 用户名 数字 - 查看与指定用户的指定数量私聊记录
+                String targetUser = parts[1];
+                try {
+                    int count = Integer.parseInt(parts[2]);
+                    if (count > 0 && count <= 100) {
+                        showPrivateMessages(handler, targetUser, count);
+                    } else {
+                        handler.send("ERROR: 消息数量应在1-100之间");
+                    }
+                } catch (NumberFormatException e) {
+                    handler.send("ERROR: 格式为 /h [用户名] [数量]");
+                }
+            } else {
+                handler.send("ERROR: 格式为 /h [用户名] [数量]");
+                handler.send("使用说明：");
+                handler.send("/h          - 查看最近20条消息");
+                handler.send("/h 数量     - 查看指定数量的消息");
+                handler.send("/h 用户名   - 查看与指定用户的私聊记录");
+                handler.send("/h 用户名 数量 - 查看与指定用户的指定数量私聊记录");
+            }
+        }
+
+        private void showRecentMessages(ClientHandler handler, int count) {
+            var messages = MessageStorage.getUserMessages(username, count);
+            if (messages.isEmpty()) {
+                handler.send("暂无消息记录");
+                return;
+            }
+
+            handler.send("=== 最近 " + messages.size() + " 条消息记录 ===");
+            // 按时间正序显示（最早的在前）
+            for (int i = messages.size() - 1; i >= 0; i--) {
+                handler.send(messages.get(i).toString());
+            }
+            handler.send("==================");
+        }
+
+        private void showPrivateMessages(ClientHandler handler, String targetUser, int count) {
+            var messages = MessageStorage.getPrivateMessages(username, targetUser, count);
+            if (messages.isEmpty()) {
+                handler.send("与 " + targetUser + " 暂无私聊记录");
+                return;
+            }
+
+            handler.send("=== 与 " + targetUser + " 的私聊记录 (" + messages.size() + " 条) ===");
+            for (var msg : messages) {
+                handler.send(msg.toString());
+            }
+            handler.send("==================");
+        }
+    }
+
     class DefaultMessageHandler implements MessageHandlerStrategy {
         public void handle(String message, ClientHandler handler) {
+            // 保存群聊消息到存储
+            MessageStorage.saveMessage(username, null, message, MessageStorage.MessageType.GROUP);
+
             System.out.println(username + ": " + message);
             Server.broadcast(username + ": " + message);
         }
     }
 }
-

@@ -25,7 +25,8 @@ public class UserDatabase {
 
     public static void initialize() {
         File file = new File(USER_FILE);
-        if (!file.exists()) return;
+        if (!file.exists())
+            return;
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             DocumentBuilder builder = factory.newDocumentBuilder();
@@ -86,14 +87,40 @@ public class UserDatabase {
         if (!storedPassword.equals(password)) {
             return LOGIN_PASSWORD_ERROR;
         }
+
+        // 漫游功能：如果用户已经在线，踢掉之前的连接
         if (user.isOnline()) {
-            return LOGIN_ALREADY_ONLINE;
+            kickExistingUser(username);
         }
+
         user.setOnline(true);
         saveUsersToFile();
         // 主动通知所有在线好友该用户上线
         notifyFriendsStatusChange(username, true);
         return LOGIN_SUCCESS;
+    }
+
+    /**
+     * 踢掉已经在线的用户
+     * 
+     * @param username 用户名
+     */
+    private static void kickExistingUser(String username) {
+        // 通知Server踢掉现有连接
+        notifyServerToKickUser(username);
+    }
+
+    /**
+     * 通知服务器踢掉指定用户
+     * 
+     * @param username 用户名
+     */
+    private static void notifyServerToKickUser(String username) {
+        for (UserDatabaseObserver observer : observers) {
+            if (observer instanceof ServerUserObserver) {
+                ((ServerUserObserver) observer).onUserKicked(username);
+            }
+        }
     }
 
     // 新增：下线方法
@@ -111,7 +138,8 @@ public class UserDatabase {
     // 主动通知所有在线好友该用户上线/下线
     private static void notifyFriendsStatusChange(String username, boolean online) {
         User user = users.get(username);
-        if (user == null) return;
+        if (user == null)
+            return;
         for (String friend : user.getFriends()) {
             com.chat.server.ClientHandler handler = com.chat.server.Server.getClientHandler(friend);
             if (handler != null) {
@@ -186,5 +214,10 @@ public class UserDatabase {
 
     public interface UserDatabaseObserver {
         void onUserChanged(User user);
+    }
+
+    // 扩展的服务器观察者接口，用于处理踢用户等服务器特定操作
+    public interface ServerUserObserver extends UserDatabaseObserver {
+        void onUserKicked(String username);
     }
 }
