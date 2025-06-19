@@ -290,6 +290,10 @@ public class ClientHandler implements Runnable {
                 handler.send("ERROR: 你不在该群聊中");
                 return;
             }
+
+            // 保存群聊消息到存储系统
+            MessageStorage.saveMessage(username, groupName, msg, MessageStorage.MessageType.GROUP);
+
             GroupDatabase.sendGroupMessage(groupName, username, msg);
         }
     }
