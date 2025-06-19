@@ -25,7 +25,6 @@ public class ChatUIFriends implements MessageObserver {
         this.parentFrame = parentFrame;
         this.currentUser = currentUser;
         this.limitProvider = limitProvider; // 接收 ChatWindowLimitProvider 实例
-        client.addObserver(this);
         createFriendsPanel();
     }
 

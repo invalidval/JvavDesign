@@ -197,6 +197,9 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
                     }
                 }
             }
+        }else if(message.startsWith("ONLINE:")|| message.startsWith("STATUS:")){
+            if (friendsUI != null) friendsUI.onMessageReceived(message);
+
         }
     }
 
