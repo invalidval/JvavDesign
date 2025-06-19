@@ -1,10 +1,11 @@
 # JvavDesign
-The course-design of  java
+The course-design of java
 ## 提交说明
-- 目前最新分支位于feature/message-history-and-roaming。
-- 可自建其他分支，并及时告知后续开发者哪个分支是最新的。
+- 目前最新分支已合并至main。
+- 对于分工中所示的每一个子版本，请自建其他分支，待该版本完成后再合并到main。
+- 提交遇到冲突时，请务必谨慎处理。不确定如何保留代码时，请及时与其他相关开发者沟通。
 ## 进展描述
-- 基本功能已实现。基本UI已完成，可通过ChatAPP启动。
+- 基本功能已实现。基本UI已完成，可通过com/chat/ui/ChatAPP启动。
 ## 运行说明
 - 服务端：com/chat/server.java
 - 客户端：
@@ -12,8 +13,7 @@ The course-design of  java
   - UI版：com/chat/ui/ChatAPP.java
 ## BUG描述
 - 异地登录存在小bug，表现为第三台设备无法挤掉第二台设备。
-- UI界面没反应时请查看控制台exception输出，一般是出现异常了（如Client 57行左右引起的，我没解决。触发条件：登录后迅速、胡乱操作其他界面，概率20%）。
-- 接收到的消息会翻倍，但是登录等ECHO消息不会翻倍，聊天文件里也未翻倍。返回的聊天记录翻倍了，怀疑问题出现在服务器。持续观察中，欢迎发现问题者修复它。
+- UI界面没反应时请查看控制台exception输出，一般是出现异常了（如Client 57行左右引起的，概率10%，未解决）。
 ## 后续工作注意事项
 - UI是第二位的，功能是第一位的。功能可以参考ClientHandler.java中的“指令”思路。
 - 完成功能后，也请完成相应的UI。
