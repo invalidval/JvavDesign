@@ -123,6 +123,54 @@ public class MessageStorage {
     }
 
     /**
+     * 获取指定群聊的历史消息
+     */
+    public static List<StoredMessage> getGroupMessages(String groupName, int limit) {
+        if (!initialized)
+            initialize();
+
+        List<StoredMessage> groupMessages = new ArrayList<>();
+        for (List<StoredMessage> msgs : userMessageCache.values()) {
+            for (StoredMessage msg : msgs) {
+                if (msg.getType() == MessageType.GROUP && groupName.equals(msg.getReceiver())) {
+                    groupMessages.add(msg);
+                }
+            }
+        }
+        // 按时间排序
+        groupMessages.sort(Comparator.comparing(StoredMessage::getTimestamp));
+        if (limit > 0 && groupMessages.size() > limit) {
+            return groupMessages.subList(Math.max(0, groupMessages.size() - limit), groupMessages.size());
+        }
+        return groupMessages;
+    }
+
+    /**
+     * 获取指定群聊中指定成员的历史消息
+     */
+    public static List<StoredMessage> getGroupMemberMessages(String groupName, String member, int limit) {
+        if (!initialized)
+            initialize();
+
+        List<StoredMessage> memberMessages = new ArrayList<>();
+        for (List<StoredMessage> msgs : userMessageCache.values()) {
+            for (StoredMessage msg : msgs) {
+                if (msg.getType() == MessageType.GROUP
+                        && groupName.equals(msg.getReceiver())
+                        && member.equals(msg.getSender())) {
+                    memberMessages.add(msg);
+                }
+            }
+        }
+        // 按时间排序
+        memberMessages.sort(Comparator.comparing(StoredMessage::getTimestamp));
+        if (limit > 0 && memberMessages.size() > limit) {
+            return memberMessages.subList(Math.max(0, memberMessages.size() - limit), memberMessages.size());
+        }
+        return memberMessages;
+    }
+
+    /**
      * 添加消息到内存缓存
      */
     private static void addToCache(StoredMessage message) {
@@ -326,10 +374,11 @@ public class MessageStorage {
         public String toString() {
             String timeStr = timestamp.format(DateTimeFormatter.ofPattern("MM-dd HH:mm"));
             if (type == MessageType.PRIVATE) {
-                return String.format("[%s] [私聊] %s: %s", timeStr, sender, content);
-            } else {
-                return String.format("[%s] %s: %s", timeStr, sender, content);
+                return String.format("[%s] [私聊] [%s -> %s]: %s", timeStr, sender, receiver, content);
+            } else if(type == MessageType.GROUP) {
+                return String.format("[%s] [群聊] [%s] %s: %s", timeStr, receiver ,sender, content);
             }
+            return String.format("[%s] [未知类型] %s: %s", timeStr, sender, content);
         }
     }
 }

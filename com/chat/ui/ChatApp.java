@@ -22,11 +22,33 @@ public class ChatApp implements MessageObserver {
     private MessageListPanel messageListPanel;
     private ChatUIFriends friendsUI;
     private ChatUIGroup groupUI;
+    private ChatUIHistory historyUI; // 聊天记录界面
 
     // 消息列表数据：key=会话名（好友或群名），value=最近一条消息
     private Map<String, String> sessionLastMsg = new ConcurrentHashMap<>();
     // 会话类型：true=群聊，false=私聊
     private Map<String, Boolean> sessionIsGroup = new ConcurrentHashMap<>();
+
+    // 背景面板内部类
+    class BackgroundPanel extends JPanel {
+        private Image bgImage;
+        public BackgroundPanel(String imagePath) {
+            try {
+                bgImage = new ImageIcon(getClass().getClassLoader().getResource(imagePath)).getImage();
+            } catch (Exception e) {
+                bgImage = null;
+            }
+            setLayout(new GridBagLayout());
+        }
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            if (bgImage != null) {
+                // 自动缩放填充整个面板
+                g.drawImage(bgImage, 0, 0, getWidth(), getHeight(), this);
+            }
+        }
+    }
 
     public ChatApp() {
         frame = new JFrame("Chat Application");
@@ -37,24 +59,47 @@ public class ChatApp implements MessageObserver {
         createLoginPanel();
 
         frame.add(loginPanel, "Login");
+        frame.setLocationRelativeTo(null); // 让窗口居中显示
         frame.setVisible(true);
     }
 
     private void createLoginPanel() {
-        loginPanel = new JPanel(new GridLayout(3, 2, 10, 10));
+        // loginPanel = new JPanel(new GridBagLayout());
+        loginPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(10, 10, 10, 10);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
         JLabel usernameLabel = new JLabel("用户名：");
         JTextField usernameField = new JTextField();
+        usernameField.setPreferredSize(new Dimension(200, 30));
+
         JLabel passwordLabel = new JLabel("密码：");
         JPasswordField passwordField = new JPasswordField();
-        JButton loginButton = new JButton("登录");
-        JButton registerButton = new JButton("注册");
+        passwordField.setPreferredSize(new Dimension(200, 30));
 
-        loginPanel.add(usernameLabel);
-        loginPanel.add(usernameField);
-        loginPanel.add(passwordLabel);
-        loginPanel.add(passwordField);
-        loginPanel.add(loginButton);
-        loginPanel.add(registerButton);
+        JButton loginButton = new JButton("登录");
+        loginButton.setPreferredSize(new Dimension(120, 35));
+        JButton registerButton = new JButton("注册");
+        registerButton.setPreferredSize(new Dimension(120, 35));
+
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        loginPanel.add(usernameLabel, gbc);
+        gbc.gridx = 1;
+        loginPanel.add(usernameField, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        loginPanel.add(passwordLabel, gbc);
+        gbc.gridx = 1;
+        loginPanel.add(passwordField, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        loginPanel.add(loginButton, gbc);
+        gbc.gridx = 1;
+        loginPanel.add(registerButton, gbc);
 
         loginButton.addActionListener(e -> {
             String username = usernameField.getText().trim();
@@ -76,6 +121,11 @@ public class ChatApp implements MessageObserver {
                 JOptionPane.showMessageDialog(frame, "用户名和密码不能为空！", "错误", JOptionPane.ERROR_MESSAGE);
             }
         });
+
+        // 设置背景面板，使用lg_bg.png
+        BackgroundPanel bgPanel = new BackgroundPanel("resources/lg_bg.jpg");
+        bgPanel.add(loginPanel); // 将原有loginPanel加到背景面板上
+        this.loginPanel = bgPanel; // 用背景面板替换原有loginPanel
     }
 
     // 消息观察者回调
@@ -123,8 +173,27 @@ public class ChatApp implements MessageObserver {
                     if (messageListPanel != null) messageListPanel.refresh();
                 }
             }
-        } else {
-            JOptionPane.showMessageDialog(frame, message);
+        } else if (message.startsWith("SYSTEM:")) {
+            int statusCodeStart = message.lastIndexOf("[");
+            int statusCodeEnd = message.lastIndexOf("]");
+            if (statusCodeStart != -1 && statusCodeEnd != -1) {
+                String statusCode = message.substring(statusCodeStart + 1, statusCodeEnd).trim();
+                if ("000".equals(statusCode)) {
+                    JOptionPane.showMessageDialog(frame, "检测到异地登录，本客户端将下线！", "警告", JOptionPane.WARNING_MESSAGE);
+                    CardLayout cl = (CardLayout) frame.getContentPane().getLayout();
+                    cl.show(frame.getContentPane(), "Login");
+
+                    // 停止客户端监听并重新初始化
+                    client.stopListening();
+                    try {
+                        client = new Client("localhost", 8888); // 重新初始化客户端
+                        client.addObserver(this);
+                        client.startListening();
+                    } catch (IOException e) {
+                        JOptionPane.showMessageDialog(frame, "无法重新连接到服务器：" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            }
         }
     }
 
@@ -145,18 +214,25 @@ public class ChatApp implements MessageObserver {
             groupUI = new ChatUIGroup(client, frame, currentUser);
             mainPanel.add(groupUI.getPanel(), "Groups");
 
+            // 聊天记录面板
+            historyUI = new ChatUIHistory(client, frame, currentUser);
+            mainPanel.add(historyUI.getPanel(), "History");
+
             // 顶部导航栏
             JPanel navBar = new JPanel(new FlowLayout(FlowLayout.LEFT));
             JButton msgBtn = new JButton("消息");
             JButton friendsBtn = new JButton("好友");
             JButton groupsBtn = new JButton("群聊");
+            JButton historyBtn = new JButton("聊天记录");
             navBar.add(msgBtn);
             navBar.add(friendsBtn);
             navBar.add(groupsBtn);
+            navBar.add(historyBtn);
 
             msgBtn.addActionListener(e -> mainCardLayout.show(mainPanel, "Messages"));
             friendsBtn.addActionListener(e -> mainCardLayout.show(mainPanel, "Friends"));
             groupsBtn.addActionListener(e -> mainCardLayout.show(mainPanel, "Groups"));
+            historyBtn.addActionListener(e -> mainCardLayout.show(mainPanel, "History"));
 
             JPanel container = new JPanel(new BorderLayout());
             container.add(navBar, BorderLayout.NORTH);
@@ -188,7 +264,11 @@ public class ChatApp implements MessageObserver {
             setLayout(new BorderLayout());
             listPanel = new JPanel();
             listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
+            // 设置listPanel透明，避免背景色影响
+            listPanel.setOpaque(false);
+
             JScrollPane scrollPane = new JScrollPane(listPanel);
+            scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
             add(scrollPane, BorderLayout.CENTER);
             refresh();
         }
@@ -196,7 +276,9 @@ public class ChatApp implements MessageObserver {
         public void refresh() {
             listPanel.removeAll();
             if (sessionLastMsg.isEmpty()) {
-                listPanel.add(new JLabel("暂无消息"));
+                JLabel emptyLabel = new JLabel("暂无消息");
+                emptyLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+                listPanel.add(emptyLabel);
             } else {
                 // 按最近更新时间排序
                 List<Map.Entry<String, String>> entries = new ArrayList<>(sessionLastMsg.entrySet());
@@ -205,7 +287,12 @@ public class ChatApp implements MessageObserver {
                     String lastMsg = entry.getValue();
                     boolean isGroup = sessionIsGroup.getOrDefault(session, false);
                     JPanel card = new JPanel(new BorderLayout());
+                    card.setMaximumSize(new Dimension(600, 50));
+                    card.setPreferredSize(new Dimension(600, 50));
+                    card.setMinimumSize(new Dimension(600, 50));
                     card.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
+                    card.setAlignmentX(Component.CENTER_ALIGNMENT);
+
                     JLabel nameLabel = new JLabel(isGroup ? "[群] " + session : session);
                     JLabel msgLabel = new JLabel(lastMsg);
                     JButton openBtn = new JButton("打开");
@@ -220,6 +307,7 @@ public class ChatApp implements MessageObserver {
                     card.add(msgLabel, BorderLayout.CENTER);
                     card.add(openBtn, BorderLayout.EAST);
                     listPanel.add(card);
+                    listPanel.add(Box.createVerticalStrut(8));
                 }
             }
             listPanel.revalidate();

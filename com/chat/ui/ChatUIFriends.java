@@ -83,10 +83,17 @@ public class ChatUIFriends implements MessageObserver {
         if (!onlineFriends.isEmpty()) {
             JLabel onlineLabel = new JLabel("在线好友");
             onlineLabel.setFont(onlineLabel.getFont().deriveFont(Font.BOLD));
+            onlineLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
             friendsListPanel.add(onlineLabel);
+            friendsListPanel.add(Box.createVerticalStrut(5));
             for (String friend : onlineFriends) {
                 JPanel friendCard = new JPanel(new BorderLayout());
+                friendCard.setMaximumSize(new Dimension(600, 40));
+                friendCard.setPreferredSize(new Dimension(600, 40));
+                friendCard.setMinimumSize(new Dimension(600, 40));
                 friendCard.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+                friendCard.setAlignmentX(Component.LEFT_ALIGNMENT);
+
                 JLabel friendLabel = new JLabel(friend);
                 JLabel statusLabel = new JLabel("[在线]");
                 statusLabel.setForeground(new Color(0, 153, 0));
@@ -101,6 +108,7 @@ public class ChatUIFriends implements MessageObserver {
                 friendCard.add(leftPanel, BorderLayout.CENTER);
                 friendCard.add(chatButton, BorderLayout.EAST);
                 friendsListPanel.add(friendCard);
+                friendsListPanel.add(Box.createVerticalStrut(6));
             }
         }
 
@@ -108,10 +116,17 @@ public class ChatUIFriends implements MessageObserver {
         if (!offlineFriends.isEmpty()) {
             JLabel offlineLabel = new JLabel("离线好友");
             offlineLabel.setFont(offlineLabel.getFont().deriveFont(Font.BOLD));
+            offlineLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
             friendsListPanel.add(offlineLabel);
+            friendsListPanel.add(Box.createVerticalStrut(5));
             for (String friend : offlineFriends) {
                 JPanel friendCard = new JPanel(new BorderLayout());
+                friendCard.setMaximumSize(new Dimension(600, 40));
+                friendCard.setPreferredSize(new Dimension(600, 40));
+                friendCard.setMinimumSize(new Dimension(600, 40));
                 friendCard.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+                friendCard.setAlignmentX(Component.LEFT_ALIGNMENT);
+
                 JLabel friendLabel = new JLabel(friend);
                 JLabel statusLabel = new JLabel("[离线]");
                 statusLabel.setForeground(Color.GRAY);
@@ -126,11 +141,13 @@ public class ChatUIFriends implements MessageObserver {
                 friendCard.add(leftPanel, BorderLayout.CENTER);
                 friendCard.add(chatButton, BorderLayout.EAST);
                 friendsListPanel.add(friendCard);
+                friendsListPanel.add(Box.createVerticalStrut(6));
             }
         }
 
         if (onlineFriends.isEmpty() && offlineFriends.isEmpty()) {
             JLabel noFriendsLabel = new JLabel("暂无好友");
+            noFriendsLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
             friendsListPanel.add(noFriendsLabel);
         }
 
@@ -142,8 +159,11 @@ public class ChatUIFriends implements MessageObserver {
         PrivateChatWindow win = privateChats.get(friendName);
         if (win == null || !win.isDisplayable()) {
             win = new PrivateChatWindow(friendName);
+            win.setSize(600, 400);
             privateChats.put(friendName, win);
         }
+        win.setTitle("私聊 - " + friendName);
+        win.setLocationRelativeTo(null);
         win.setVisible(true);
         win.toFront();
     }

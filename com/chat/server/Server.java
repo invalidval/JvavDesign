@@ -55,7 +55,7 @@ public class Server implements UserDatabase.UserDatabaseObserver {
         // 如果已经有同名用户在线，先踢掉旧连接
         ClientHandler existingHandler = clients.get(name);
         if (existingHandler != null && existingHandler != handler) {
-            existingHandler.send("SYSTEM: 您的账号在另一台设备上登录，当前连接将被断开。");
+            existingHandler.send("SYSTEM: 您的账号在另一台设备上登录，当前连接将被断开。[000]");
             existingHandler.forceDisconnect();
             System.out.println("用户 " + name + " 的旧连接被踢下线（账号在其他设备登录）");
         }

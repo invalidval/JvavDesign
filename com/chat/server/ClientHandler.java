@@ -6,7 +6,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import com.chat.model.User;
+import com.chat.model.*;
 import com.chat.server.UserDatabase;
 import com.chat.server.GroupDatabase;
 import com.chat.server.MessageStorage;
@@ -33,6 +33,8 @@ public class ClientHandler implements Runnable {
         handlerStrategies.put("/GS", new GroupSendHandler()); // 新增
         handlerStrategies.put("/ONLINE", new OnlineStatusHandler()); // 新增
         handlerStrategies.put("/H", new HistoryMessageHandler()); // 历史消息查询
+        handlerStrategies.put("/JG", new JoinGroupHandler()); // 新增加入群聊处理器
+        handlerStrategies.put("/HG", new GroupHistoryMessageHandler()); // 新增群聊历史消息查询
         handlerStrategies.put("DEFAULT", new DefaultMessageHandler());
     }
 
@@ -399,6 +401,107 @@ public class ClientHandler implements Runnable {
 
             System.out.println(username + ": " + message);
             Server.broadcast(username + ": " + message);
+        }
+    }
+
+    // 加入群聊
+    class JoinGroupHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            String[] parts = message.trim().split("\\s+");
+            if (parts.length < 2) {
+                handler.send("ERROR: 格式为 /jg 群名");
+                return;
+            }
+            String groupName = parts[1];
+            Group group = GroupDatabase.getGroup(groupName);
+            if (group == null) {
+                handler.send("ERROR: 群聊不存在");
+                return;
+            }
+            if (group.getMembers().contains(UserDatabase.getUser(username))) {
+                handler.send("ERROR: 你已在该群聊中");
+                return;
+}
+            group.getMembers().add(UserDatabase.getUser(username));
+            group.notifyObservers(); // 通知观察者更新群聊状态
+            handler.send("SUCCESS: 加入群聊成功");
+        }
+    }
+
+    class GroupHistoryMessageHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            if (username == null) {
+                handler.send("ERROR: 未登录");
+                return;
+            }
+            String[] parts = message.trim().split("\\s+");
+            if (parts.length == 2) {
+                // /hg 群名
+                String groupName = parts[1];
+                showGroupMessages(handler, groupName, 20);
+            } else if (parts.length == 3) {
+                // /hg 群名 数量
+                String groupName = parts[1];
+                try {
+                    int count = Integer.parseInt(parts[2]);
+                    if (count > 0 && count <= 100) {
+                        showGroupMessages(handler, groupName, count);
+                    } else {
+                        handler.send("ERROR: 消息数量应在1-100之间");
+                    }
+                } catch (NumberFormatException e) {
+                    // /hg 群名 成员名
+                    String member = parts[2];
+                    showGroupMemberMessages(handler, groupName, member, 20);
+                }
+            } else if (parts.length == 4) {
+                // /hg 群名 成员名 数量
+                String groupName = parts[1];
+                String member = parts[2];
+                try {
+                    int count = Integer.parseInt(parts[3]);
+                    if (count > 0 && count <= 100) {
+                        showGroupMemberMessages(handler, groupName, member, count);
+                    } else {
+                        handler.send("ERROR: 消息数量应在1-100之间");
+                    }
+                } catch (NumberFormatException e) {
+                    handler.send("ERROR: 格式为 /hg 群名 [成员名] [数量]");
+                }
+            } else {
+                handler.send("ERROR: 格式为 /hg 群名 [成员名] [数量]");
+                handler.send("使用说明：");
+                handler.send("/hg 群名                - 查看该群最近20条消息");
+                handler.send("/hg 群名 数量           - 查看该群指定数量的消息");
+                handler.send("/hg 群名 成员名         - 查看该群指定成员的最近20条消息");
+                handler.send("/hg 群名 成员名 数量    - 查看该群指定成员的指定数量消息");
+            }
+        }
+
+        private void showGroupMessages(ClientHandler handler, String groupName, int count) {
+            var messages = MessageStorage.getGroupMessages(groupName, count);
+            if (messages.isEmpty()) {
+                handler.send("群聊 " + groupName + " 暂无消息记录");
+                return;
+            }
+            handler.send("=== 群聊 " + groupName + " 的消息记录 (" + messages.size() + " 条) ===");
+            for (var msg : messages) {
+                handler.send(msg.toString());
+            }
+            handler.send("==================");
+        }
+
+        private void showGroupMemberMessages(ClientHandler handler, String groupName, String member, int count) {
+            var messages = MessageStorage.getGroupMemberMessages(groupName, member, count);
+            if (messages.isEmpty()) {
+                handler.send("群聊 " + groupName + " 中成员 " + member + " 暂无消息记录");
+                return;
+            }
+            handler.send("=== 群聊 " + groupName + " 中 " + member + " 的消息记录 (" + messages.size() + " 条) ===");
+            for (var msg : messages) {
+                handler.send(msg.toString());
+            }
+            handler.send("==================");
         }
     }
 }
