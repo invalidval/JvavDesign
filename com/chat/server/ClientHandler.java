@@ -69,11 +69,8 @@ public class ClientHandler implements Runnable {
                     int loginStatus = UserDatabase.loginUser(username, password);
                     if (loginStatus == UserDatabase.LOGIN_SUCCESS) {
                         this.username = username;
-                        loggedIn = true;
-
-                        // 先添加新连接，再处理踢用户逻辑
                         Server.addClient(username, this);
-
+                        loggedIn = true;
                         out.println("SUCCESS: 登录成功！您可以开始聊天了。");
 
                         // 显示最近的消息记录
@@ -293,10 +290,6 @@ public class ClientHandler implements Runnable {
                 handler.send("ERROR: 你不在该群聊中");
                 return;
             }
-
-            // 保存群聊消息到存储系统
-            MessageStorage.saveMessage(username, groupName, msg, MessageStorage.MessageType.GROUP);
-
             GroupDatabase.sendGroupMessage(groupName, username, msg);
         }
     }

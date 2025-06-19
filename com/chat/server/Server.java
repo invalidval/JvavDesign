@@ -10,7 +10,7 @@ import com.chat.server.GroupDatabase;
 import com.chat.server.MessageStorage;
 import com.chat.model.User;
 
-public class Server implements UserDatabase.UserDatabaseObserver {
+public class Server implements UserDatabase.ServerUserObserver {
     private static final int PORT = 8888;
     private static ConcurrentHashMap<String, ClientHandler> clients = new ConcurrentHashMap<>();
     private static ExecutorService threadPool;
@@ -52,20 +52,27 @@ public class Server implements UserDatabase.UserDatabaseObserver {
     }
 
     public static void addClient(String name, ClientHandler handler) {
-        // 如果已经有同名用户在线，先踢掉旧连接
-        ClientHandler existingHandler = clients.get(name);
-        if (existingHandler != null && existingHandler != handler) {
-            existingHandler.send("SYSTEM: 您的账号在另一台设备上登录，当前连接将被断开。");
-            existingHandler.forceDisconnect();
-            System.out.println("用户 " + name + " 的旧连接被踢下线（账号在其他设备登录）");
-        }
-
         clients.put(name, handler);
     }
 
     public static void removeClient(String name) {
         clients.remove(name);
         UserDatabase.logoutUser(name); // 确保下线状态同步
+    }
+
+    /**
+     * 强制踢掉指定用户的连接
+     * 
+     * @param username 用户名
+     */
+    public static void kickUser(String username) {
+        ClientHandler handler = clients.get(username);
+        if (handler != null) {
+            handler.send("SYSTEM: 您的账号在另一台设备上登录，当前连接将被断开。");
+            handler.forceDisconnect();
+            clients.remove(username);
+            System.out.println("用户 " + username + " 被踢下线（账号在其他设备登录）");
+        }
     }
 
     public static void sendPrivateMessage(String sender, String receiver, String message) {
@@ -109,4 +116,9 @@ public class Server implements UserDatabase.UserDatabaseObserver {
         System.out.println("用户状态变化: " + user.getName() + " - 在线: " + user.isOnline());
     }
 
+    // 实现ServerUserObserver接口
+    @Override
+    public void onUserKicked(String username) {
+        kickUser(username);
+    }
 }
