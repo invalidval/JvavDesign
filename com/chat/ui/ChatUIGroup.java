@@ -18,11 +18,13 @@ public class ChatUIGroup implements MessageObserver {
     private Map<String, GroupChatWindow> groupChats = new ConcurrentHashMap<>();
     private List<String> myGroups = new ArrayList<>();
     private Map<String, List<String>> groupMembers = new HashMap<>();
+    private ChatWindowLimitProvider limitProvider;
 
-    public ChatUIGroup(Client client, JFrame parentFrame, String currentUser) {
+    public ChatUIGroup(Client client, JFrame parentFrame, String currentUser, ChatWindowLimitProvider limitProvider) {
         this.client = client;
         this.parentFrame = parentFrame;
         this.currentUser = currentUser;
+        this.limitProvider = limitProvider; // 接收 ChatWindowLimitProvider 实例
         client.addObserver(this);
         createGroupPanel();
         requestGroupList();
@@ -107,7 +109,23 @@ public class ChatUIGroup implements MessageObserver {
         groupListPanel.repaint();
     }
 
+    // 返回当前已打开的群聊窗口数
+    public int getOpenChatWindowCount() {
+        int openCount = 0;
+        for (GroupChatWindow win : groupChats.values()) {
+            if (win != null && win.isDisplayable()) openCount++;
+        }
+        return openCount;
+    }
+
     public void openGroupChatWindow(String groupName) {
+        // 统一计数所有聊天窗口（私聊+群聊）
+        int max = limitProvider.getMaxChatWindows();
+        int totalOpen = limitProvider.getCurrentOpenChatWindowCount();
+        if (!groupChats.containsKey(groupName) && totalOpen >= max) {
+            JOptionPane.showMessageDialog(parentFrame, "已达到最大聊天窗口数(" + max + ")，请先关闭其他窗口！", "提示", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
         GroupChatWindow win = groupChats.get(groupName);
         if (win == null || !win.isDisplayable()) {
             win = new GroupChatWindow(groupName);

@@ -18,14 +18,15 @@ public class ChatUIFriends implements MessageObserver {
     private Map<String, PrivateChatWindow> privateChats = new ConcurrentHashMap<>();
     private Map<String, Boolean> friendOnlineStatus = new ConcurrentHashMap<>();
     private java.util.List<String> currentFriends = new ArrayList<>();
+    private ChatWindowLimitProvider limitProvider;
 
-    public ChatUIFriends(Client client, JFrame parentFrame, String currentUser) {
+    public ChatUIFriends(Client client, JFrame parentFrame, String currentUser, ChatWindowLimitProvider limitProvider) {
         this.client = client;
         this.parentFrame = parentFrame;
         this.currentUser = currentUser;
+        this.limitProvider = limitProvider; // 接收 ChatWindowLimitProvider 实例
         client.addObserver(this);
         createFriendsPanel();
-        // 已移除定时刷新/online相关逻辑
     }
 
     public JPanel getPanel() {
@@ -155,7 +156,23 @@ public class ChatUIFriends implements MessageObserver {
         friendsListPanel.repaint();
     }
 
+    // 返回当前已打开的私聊窗口数
+    public int getOpenChatWindowCount() {
+        int openCount = 0;
+        for (PrivateChatWindow win : privateChats.values()) {
+            if (win != null && win.isDisplayable()) openCount++;
+        }
+        return openCount;
+    }
+
     public void openPrivateChatWindow(String friendName) {
+        // 统一计数所有聊天窗口（私聊+群聊）
+        int max = limitProvider.getMaxChatWindows();
+        int totalOpen = limitProvider.getCurrentOpenChatWindowCount();
+        if (!privateChats.containsKey(friendName) && totalOpen >= max) {
+            JOptionPane.showMessageDialog(parentFrame, "已达到最大聊天窗口数(" + max + ")，请先关闭其他窗口！", "提示", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
         PrivateChatWindow win = privateChats.get(friendName);
         if (win == null || !win.isDisplayable()) {
             win = new PrivateChatWindow(friendName);

@@ -10,8 +10,8 @@ import java.util.*;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class ChatApp implements MessageObserver {
-    private JFrame frame;
+public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
+    private JFrame frame ;
     private JPanel loginPanel;
     private Client client;
     private String currentUser;
@@ -28,6 +28,9 @@ public class ChatApp implements MessageObserver {
     private Map<String, String> sessionLastMsg = new ConcurrentHashMap<>();
     // 会话类型：true=群聊，false=私聊
     private Map<String, Boolean> sessionIsGroup = new ConcurrentHashMap<>();
+
+    // 聊天窗口最大数量设置
+    private int maxChatWindows = 5;
 
     // 背景面板内部类
     class BackgroundPanel extends JPanel {
@@ -207,11 +210,11 @@ public class ChatApp implements MessageObserver {
             mainPanel.add(messageListPanel, "Messages");
 
             // 好友列表面板
-            friendsUI = new ChatUIFriends(client, frame, currentUser);
+            friendsUI = new ChatUIFriends(client, frame, currentUser, this); // 传递 ChatWindowLimitProvider 实例
             mainPanel.add(friendsUI.getPanel(), "Friends");
 
             // 群聊列表面板
-            groupUI = new ChatUIGroup(client, frame, currentUser);
+            groupUI = new ChatUIGroup(client, frame, currentUser, this); // 传递 ChatWindowLimitProvider 实例
             mainPanel.add(groupUI.getPanel(), "Groups");
 
             // 聊天记录面板
@@ -224,15 +227,20 @@ public class ChatApp implements MessageObserver {
             JButton friendsBtn = new JButton("好友");
             JButton groupsBtn = new JButton("群聊");
             JButton historyBtn = new JButton("聊天记录");
+            JButton settingsBtn = new JButton("设置"); // 新增设置按钮
             navBar.add(msgBtn);
             navBar.add(friendsBtn);
             navBar.add(groupsBtn);
             navBar.add(historyBtn);
+            navBar.add(settingsBtn); // 添加到导航栏
 
             msgBtn.addActionListener(e -> mainCardLayout.show(mainPanel, "Messages"));
             friendsBtn.addActionListener(e -> mainCardLayout.show(mainPanel, "Friends"));
             groupsBtn.addActionListener(e -> mainCardLayout.show(mainPanel, "Groups"));
             historyBtn.addActionListener(e -> mainCardLayout.show(mainPanel, "History"));
+
+            // 设置按钮弹出设置对话框
+            settingsBtn.addActionListener(e -> showSettingsDialog());
 
             JPanel container = new JPanel(new BorderLayout());
             container.add(navBar, BorderLayout.NORTH);
@@ -243,6 +251,21 @@ public class ChatApp implements MessageObserver {
         CardLayout cl = (CardLayout) frame.getContentPane().getLayout();
         cl.show(frame.getContentPane(), "Main");
         mainCardLayout.show(mainPanel, "Messages");
+    }
+
+    // 设置对话框
+    private void showSettingsDialog() {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JLabel label = new JLabel("最大聊天窗口数：");
+        SpinnerNumberModel model = new SpinnerNumberModel(maxChatWindows, 1, 20, 1);
+        JSpinner spinner = new JSpinner(model);
+        panel.add(label);
+        panel.add(spinner);
+
+        int result = JOptionPane.showConfirmDialog(frame, panel, "设置", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result == JOptionPane.OK_OPTION) {
+            maxChatWindows = (Integer) spinner.getValue();
+        }
     }
 
     public void start() {
@@ -321,4 +344,22 @@ public class ChatApp implements MessageObserver {
             app.start();
         });
     }
+
+    @Override
+    public int getMaxChatWindows() {
+        return maxChatWindows;
+    }
+
+    @Override
+    public int getCurrentOpenChatWindowCount() {
+        // 返回当前已打开的群聊窗口数和私聊窗口数之和
+        return (friendsUI != null ? friendsUI.getOpenChatWindowCount() : 0) +
+               (groupUI != null ? groupUI.getOpenChatWindowCount() : 0);
+    }
+}
+
+// 聊天窗口数限制接口
+interface ChatWindowLimitProvider {
+    int getMaxChatWindows();
+    int getCurrentOpenChatWindowCount();
 }
