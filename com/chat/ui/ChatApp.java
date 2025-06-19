@@ -271,7 +271,7 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
     public void start() {
         try {
             client = new Client("localhost", 8888);
-            client.addObserver(this);
+            client.addObserver(this); // 确保只注册一次
             client.startListening();
         } catch (IOException e) {
             JOptionPane.showMessageDialog(frame, "无法连接到服务器：" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);

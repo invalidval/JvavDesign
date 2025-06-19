@@ -19,6 +19,9 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class MessageStorage {
     private static final String MESSAGE_FILE = "messages.xml";
+    private static final String GROUP_FILE_PREFIX = "group_";
+    private static final String GROUP_FILE_SUFFIX = ".xml";
+    private static final int GROUP_MESSAGE_LIMIT = 100;
     private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static AtomicLong messageIdCounter = new AtomicLong(1);
 
@@ -57,7 +60,11 @@ public class MessageStorage {
         addToCache(message);
 
         // 保存到文件
-        saveToFile(message);
+        if (type == MessageType.GROUP && receiver != null) {
+            saveGroupMessageToFile(receiver, message);
+        } else {
+            saveToFile(message);
+        }
 
         System.out.println("消息已保存: " + sender + " -> " + (receiver != null ? receiver : "群聊") + ": " + content);
     }
@@ -129,14 +136,7 @@ public class MessageStorage {
         if (!initialized)
             initialize();
 
-        List<StoredMessage> groupMessages = new ArrayList<>();
-        for (List<StoredMessage> msgs : userMessageCache.values()) {
-            for (StoredMessage msg : msgs) {
-                if (msg.getType() == MessageType.GROUP && groupName.equals(msg.getReceiver())) {
-                    groupMessages.add(msg);
-                }
-            }
-        }
+        List<StoredMessage> groupMessages = loadGroupMessagesFromFile(groupName);
         // 按时间排序
         groupMessages.sort(Comparator.comparing(StoredMessage::getTimestamp));
         if (limit > 0 && groupMessages.size() > limit) {
@@ -152,14 +152,11 @@ public class MessageStorage {
         if (!initialized)
             initialize();
 
+        List<StoredMessage> groupMessages = loadGroupMessagesFromFile(groupName);
         List<StoredMessage> memberMessages = new ArrayList<>();
-        for (List<StoredMessage> msgs : userMessageCache.values()) {
-            for (StoredMessage msg : msgs) {
-                if (msg.getType() == MessageType.GROUP
-                        && groupName.equals(msg.getReceiver())
-                        && member.equals(msg.getSender())) {
-                    memberMessages.add(msg);
-                }
+        for (StoredMessage msg : groupMessages) {
+            if (msg.getSender().equals(member)) {
+                memberMessages.add(msg);
             }
         }
         // 按时间排序
@@ -277,6 +274,87 @@ public class MessageStorage {
         } catch (Exception e) {
             System.out.println("保存消息失败: " + e.getMessage());
         }
+    }
+
+    // 保存群聊消息到单独的xml文件，最多保留100条
+    private static void saveGroupMessageToFile(String groupName, StoredMessage message) {
+        String fileName = GROUP_FILE_PREFIX + groupName + GROUP_FILE_SUFFIX;
+        File file = new File(fileName);
+        List<StoredMessage> messages = loadGroupMessagesFromFile(groupName);
+        messages.add(message);
+        // 保证最多100条
+        if (messages.size() > GROUP_MESSAGE_LIMIT) {
+            messages = messages.subList(messages.size() - GROUP_MESSAGE_LIMIT, messages.size());
+        }
+        // 写入xml
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document doc = builder.newDocument();
+            Element root = doc.createElement("messages");
+            doc.appendChild(root);
+
+            for (StoredMessage msg : messages) {
+                Element messageElem = doc.createElement("message");
+                messageElem.setAttribute("id", String.valueOf(msg.getId()));
+                messageElem.setAttribute("sender", msg.getSender());
+                messageElem.setAttribute("receiver", msg.getReceiver() != null ? msg.getReceiver() : "");
+                messageElem.setAttribute("type", msg.getType().toString());
+                messageElem.setAttribute("timestamp", msg.getTimestamp().format(TIMESTAMP_FORMAT));
+
+                Element contentElem = doc.createElement("content");
+                contentElem.setTextContent(msg.getContent());
+                messageElem.appendChild(contentElem);
+
+                root.appendChild(messageElem);
+            }
+
+            TransformerFactory tf = TransformerFactory.newInstance();
+            Transformer transformer = tf.newTransformer();
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+            transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
+            transformer.transform(new DOMSource(doc), new StreamResult(file));
+        } catch (Exception e) {
+            System.out.println("保存群聊消息失败: " + e.getMessage());
+        }
+    }
+
+    // 读取群聊消息
+    private static List<StoredMessage> loadGroupMessagesFromFile(String groupName) {
+        String fileName = GROUP_FILE_PREFIX + groupName + GROUP_FILE_SUFFIX;
+        File file = new File(fileName);
+        List<StoredMessage> messages = new ArrayList<>();
+        if (!file.exists()) {
+            return messages;
+        }
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document doc = builder.parse(file);
+
+            NodeList messageNodes = doc.getElementsByTagName("message");
+            for (int i = 0; i < messageNodes.getLength(); i++) {
+                Element messageElem = (Element) messageNodes.item(i);
+
+                long id = Long.parseLong(messageElem.getAttribute("id"));
+                String sender = messageElem.getAttribute("sender");
+                String receiver = messageElem.getAttribute("receiver");
+                if (receiver.isEmpty())
+                    receiver = null;
+                String typeStr = messageElem.getAttribute("type");
+                String timestampStr = messageElem.getAttribute("timestamp");
+                String content = messageElem.getElementsByTagName("content").item(0).getTextContent();
+
+                MessageType type = MessageType.valueOf(typeStr);
+                LocalDateTime timestamp = LocalDateTime.parse(timestampStr, TIMESTAMP_FORMAT);
+
+                StoredMessage message = new StoredMessage(id, sender, receiver, content, type, timestamp);
+                messages.add(message);
+            }
+        } catch (Exception e) {
+            System.out.println("加载群聊消息失败: " + e.getMessage());
+        }
+        return messages;
     }
 
     /**
