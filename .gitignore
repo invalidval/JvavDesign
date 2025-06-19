@@ -1,1 +1,26 @@
-out
+# 编译文件
+*.class
+*.jar
+
+# 测试文件
+test_*.java
+test_*.class
+*Test.java
+*Test.class
+
+# IDE文件
+.idea/
+.vscode/
+*.iml
+.project
+.classpath
+.settings/
+
+# 输出目录
+out/
+target/
+build/
+
+# 临时文件
+*.tmp
+*.log

@@ -130,11 +130,29 @@ public class MessageStorage {
         userMessageCache.computeIfAbsent(message.getSender(), k -> new ArrayList<>()).add(message);
 
         // 接收者缓存（私聊消息）
-        if (message.getReceiver() != null) {
+        if (message.getReceiver() != null && message.getType() == MessageType.PRIVATE) {
             userMessageCache.computeIfAbsent(message.getReceiver(), k -> new ArrayList<>()).add(message);
-        } else {
-            // 群聊消息，添加到所有在线用户的缓存（这里简化处理）
-            // 实际应用中可能需要维护群组成员列表
+        } else if (message.getType() == MessageType.GROUP && message.getReceiver() != null) {
+            // 群聊消息，添加到群组所有成员的缓存
+            try {
+                // 使用反射调用GroupDatabase.getGroupMembers方法
+                Class<?> groupDbClass = Class.forName("com.chat.server.GroupDatabase");
+                java.lang.reflect.Method getGroupMembersMethod = groupDbClass.getMethod("getGroupMembers",
+                        String.class);
+                @SuppressWarnings("unchecked")
+                java.util.Set<String> members = (java.util.Set<String>) getGroupMembersMethod.invoke(null,
+                        message.getReceiver());
+
+                if (members != null) {
+                    for (String member : members) {
+                        if (!member.equals(message.getSender())) { // 避免重复添加发送者
+                            userMessageCache.computeIfAbsent(member, k -> new ArrayList<>()).add(message);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("获取群组成员失败: " + e.getMessage());
+            }
         }
     }
 
@@ -328,7 +346,9 @@ public class MessageStorage {
             if (type == MessageType.PRIVATE) {
                 return String.format("[%s] [私聊] %s: %s", timeStr, sender, content);
             } else {
-                return String.format("[%s] %s: %s", timeStr, sender, content);
+                // 群聊消息显示群名
+                String groupName = receiver != null ? receiver : "群聊";
+                return String.format("[%s] [群聊:%s] %s: %s", timeStr, groupName, sender, content);
             }
         }
     }
