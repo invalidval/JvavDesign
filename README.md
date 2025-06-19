@@ -5,6 +5,11 @@ The course-design of  java
 - 可自建其他分支，并及时告知后续开发者哪个分支是最新的。
 ## 进展描述
 - 基本功能已实现。基本UI已完成，可通过ChatAPP启动。
+## 运行说明
+- 服务端：com/chat/server.java
+- 客户端：
+  - 控制台版：SimpleClient.java
+  - UI版：com/chat/ui/ChatAPP.java
 ## BUG描述
 - 异地登录存在小bug，表现为第三台设备无法挤掉第二台设备。
 - UI界面没反应时请查看控制台exception输出，一般是出现异常了（如Client 57行左右引起的，我没解决。触发条件：登录后迅速、胡乱操作其他界面，概率20%）。
