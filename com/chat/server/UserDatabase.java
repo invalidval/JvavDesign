@@ -25,7 +25,8 @@ public class UserDatabase {
 
     public static void initialize() {
         File file = new File(USER_FILE);
-        if (!file.exists()) return;
+        if (!file.exists())
+            return;
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             DocumentBuilder builder = factory.newDocumentBuilder();
@@ -86,9 +87,8 @@ public class UserDatabase {
         if (!storedPassword.equals(password)) {
             return LOGIN_PASSWORD_ERROR;
         }
-        if (user.isOnline()) {
-            return LOGIN_ALREADY_ONLINE;
-        }
+
+        // 漫游功能：用户状态设为在线（实际的踢用户逻辑在Server.addClient中处理）
         user.setOnline(true);
         saveUsersToFile();
         // 主动通知所有在线好友该用户上线
@@ -111,7 +111,8 @@ public class UserDatabase {
     // 主动通知所有在线好友该用户上线/下线
     private static void notifyFriendsStatusChange(String username, boolean online) {
         User user = users.get(username);
-        if (user == null) return;
+        if (user == null)
+            return;
         for (String friend : user.getFriends()) {
             com.chat.server.ClientHandler handler = com.chat.server.Server.getClientHandler(friend);
             if (handler != null) {

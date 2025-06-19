@@ -7,11 +7,14 @@ import java.util.Set;
 import java.util.concurrent.*;
 import com.chat.server.UserDatabase;
 import com.chat.server.GroupDatabase;
+import com.chat.server.MessageStorage;
+import com.chat.model.User;
 
-public class Server {
+public class Server implements UserDatabase.UserDatabaseObserver {
     private static final int PORT = 8888;
     private static ConcurrentHashMap<String, ClientHandler> clients = new ConcurrentHashMap<>();
     private static ExecutorService threadPool;
+    private static Server serverInstance = new Server();
 
     static {
         try {
@@ -20,14 +23,17 @@ public class Server {
             int corePoolSize = Integer.parseInt(properties.getProperty("corePoolSize"));
             int maximumPoolSize = Integer.parseInt(properties.getProperty("maximumPoolSize"));
             long keepAliveTime = Long.parseLong(properties.getProperty("keepAliveTime"));
-            threadPool = new ThreadPoolExecutor(corePoolSize, maximumPoolSize, keepAliveTime, TimeUnit.SECONDS, new LinkedBlockingQueue<>());
+            threadPool = new ThreadPoolExecutor(corePoolSize, maximumPoolSize, keepAliveTime, TimeUnit.SECONDS,
+                    new LinkedBlockingQueue<>());
         } catch (IOException e) {
             System.out.println("加载线程池配置失败，使用默认配置");
             threadPool = Executors.newFixedThreadPool(10);
         }
 
         UserDatabase.initialize(); // 初始化用户数据库
+        MessageStorage.initialize(); // 初始化消息存储系统
         GroupDatabase.initialize(); // 初始化群聊数据库
+        UserDatabase.addObserver(serverInstance); // 注册服务器为观察者
     }
 
     public static void main(String[] args) throws IOException {
@@ -46,6 +52,14 @@ public class Server {
     }
 
     public static void addClient(String name, ClientHandler handler) {
+        // 如果已经有同名用户在线，先踢掉旧连接
+        ClientHandler existingHandler = clients.get(name);
+        if (existingHandler != null && existingHandler != handler) {
+            existingHandler.send("SYSTEM: 您的账号在另一台设备上登录，当前连接将被断开。[000]");
+            existingHandler.forceDisconnect();
+            System.out.println("用户 " + name + " 的旧连接被踢下线（账号在其他设备登录）");
+        }
+
         clients.put(name, handler);
     }
 
@@ -73,7 +87,8 @@ public class Server {
     // 群聊消息分发
     public static void sendGroupMessage(String groupName, String sender, String message) {
         Set<String> members = GroupDatabase.getGroupMembers(groupName);
-        if (members == null) return;
+        if (members == null)
+            return;
         for (String member : members) {
             ClientHandler handler = clients.get(member);
             if (handler != null) {
@@ -86,4 +101,12 @@ public class Server {
     public interface MessageDispatcher {
         void dispatch(String msg);
     }
+
+    // 实现UserDatabaseObserver接口
+    @Override
+    public void onUserChanged(User user) {
+        // 可以在这里处理用户状态变化的逻辑
+        System.out.println("用户状态变化: " + user.getName() + " - 在线: " + user.isOnline());
+    }
+
 }

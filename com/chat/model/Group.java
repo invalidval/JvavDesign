@@ -22,10 +22,22 @@ public class Group implements GroupSubject {
         return members;
     }
 
-    // 移除无效的 @Override 注解
+    public void addMember(User user) {
+        members.add(user);
+        notifyObservers();
+    }
+
     public void removeMember(User user) {
         members.remove(user);
         notifyObservers();
+    }
+
+    public Set<String> getMemberNames() {
+        Set<String> memberNames = new HashSet<>();
+        for (User user : members) {
+            memberNames.add(user.getName());
+        }
+        return memberNames;
     }
 
     @Override

@@ -68,6 +68,18 @@ public class Client implements MessageSubject {
         t.setDaemon(true);
         t.start();
     }
+
+    public void stopListening() {
+        listening = false;
+        try {
+            if (socket != null && !socket.isClosed()) {
+                socket.close(); // 关闭套接字
+            }
+        } catch (IOException e) {
+            // 处理关闭套接字时的异常
+            e.printStackTrace();
+        }
+    }
 }
 
 interface MessageSubject {
@@ -75,4 +87,3 @@ interface MessageSubject {
     void removeObserver(MessageObserver observer);
     void notifyObservers(String message);
 }
-

@@ -1,5 +1,5 @@
 package com.chat.server;
-
+import com.chat.model.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.*;
@@ -10,31 +10,57 @@ import javax.xml.transform.stream.StreamResult;
 import org.w3c.dom.*;
 
 public class GroupDatabase {
-    private static Map<String, Set<String>> groupMembers = new ConcurrentHashMap<>();
-    private static Map<String, Set<String>> userGroups = new ConcurrentHashMap<>();
+    private static Map<String, Group> groups = new ConcurrentHashMap<>();
     private static final String GROUP_FILE = "groups.xml";
 
     public static boolean createGroup(String groupName, Set<String> members) {
-        if (groupMembers.containsKey(groupName) || members.isEmpty()) return false;
-        groupMembers.put(groupName, new HashSet<>(members));
-        for (String user : members) {
-            userGroups.computeIfAbsent(user, k -> new HashSet<>()).add(groupName);
+        if (groups.containsKey(groupName) || members.isEmpty()) return false;
+        Group group = new Group(groupName);
+        for (String username : members) {
+            User user = UserDatabase.getUser(username);
+            if (user != null) {
+                group.addMember(user);
+            }
         }
+        groups.put(groupName, group);
+        saveGroupsToFile();
+        return true;
+    }
+
+    public static Group getGroup(String groupName) {
+        return groups.get(groupName);
+    }
+
+    public static boolean addUserToGroup(String groupName, String username) {
+        Group group = groups.get(groupName);
+        if (group == null) return false;
+        User user = UserDatabase.getUser(username);
+        if (user == null || group.getMembers().contains(user)) return false;
+        group.addMember(user);
         saveGroupsToFile();
         return true;
     }
 
     public static Set<String> getGroupsOfUser(String username) {
-        return userGroups.getOrDefault(username, Collections.emptySet());
+        User user = UserDatabase.getUser(username);
+        if (user == null) return Collections.emptySet();
+        Set<String> userGroups = new HashSet<>();
+        for (Group group : groups.values()) {
+            if (group.getMembers().contains(user)) {
+                userGroups.add(group.getName());
+            }
+        }
+        return userGroups;
     }
 
     public static Set<String> getGroupMembers(String groupName) {
-        return groupMembers.getOrDefault(groupName, Collections.emptySet());
+        Group group = groups.get(groupName);
+        return group != null ? group.getMemberNames() : Collections.emptySet();
     }
 
     public static boolean isUserInGroup(String groupName, String username) {
-        Set<String> members = groupMembers.get(groupName);
-        return members != null && members.contains(username);
+        Group group = groups.get(groupName);
+        return group != null && group.getMembers().contains(UserDatabase.getUser(username));
     }
 
     public static void sendGroupMessage(String groupName, String sender, String message) {
@@ -53,15 +79,17 @@ public class GroupDatabase {
             for (int i = 0; i < groupNodes.getLength(); i++) {
                 Element groupElem = (Element) groupNodes.item(i);
                 String groupName = groupElem.getAttribute("name");
-                Set<String> members = new HashSet<>();
+                Group group = new Group(groupName);
                 NodeList memberNodes = groupElem.getElementsByTagName("member");
                 for (int j = 0; j < memberNodes.getLength(); j++) {
                     Element memberElem = (Element) memberNodes.item(j);
                     String memberName = memberElem.getTextContent();
-                    members.add(memberName);
-                    userGroups.computeIfAbsent(memberName, k -> new HashSet<>()).add(groupName);
+                    User user = UserDatabase.getUser(memberName);
+                    if (user != null) {
+                        group.addMember(user);
                 }
-                groupMembers.put(groupName, members);
+                }
+                groups.put(groupName, group);
             }
         } catch (Exception e) {
             System.out.println("群聊数据加载失败: " + e.getMessage());
@@ -75,12 +103,12 @@ public class GroupDatabase {
             Document doc = builder.newDocument();
             Element root = doc.createElement("groups");
             doc.appendChild(root);
-            for (String groupName : groupMembers.keySet()) {
+            for (Group group : groups.values()) {
                 Element groupElem = doc.createElement("group");
-                groupElem.setAttribute("name", groupName);
-                for (String member : groupMembers.get(groupName)) {
+                groupElem.setAttribute("name", group.getName());
+                for (User member : group.getMembers()) {
                     Element memberElem = doc.createElement("member");
-                    memberElem.setTextContent(member);
+                    memberElem.setTextContent(member.getName()); // 修正为 getName
                     groupElem.appendChild(memberElem);
                 }
                 root.appendChild(groupElem);
