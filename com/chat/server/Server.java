@@ -64,6 +64,7 @@ public class Server implements UserDatabase.UserDatabaseObserver {
             System.out.println("【addClient】发现旧连接，准备踢出: " + existingHandler);
             existingHandler.send("SYSTEM: 您的账号在另一台设备上登录，当前连接将被断开。[000]");
             existingHandler.forceDisconnect(); // 会关闭 socket，使旧连接进入 finally 并 remove
+
         } else {
             System.out.println("【addClient】无旧连接或已是最新连接");
         }

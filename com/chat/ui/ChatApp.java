@@ -186,18 +186,7 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
                 String statusCode = message.substring(statusCodeStart + 1, statusCodeEnd).trim();
                 if ("000".equals(statusCode)) {
                     JOptionPane.showMessageDialog(frame, "检测到异地登录，本客户端将下线！", "警告", JOptionPane.WARNING_MESSAGE);
-                    CardLayout cl = (CardLayout) frame.getContentPane().getLayout();
-                    cl.show(frame.getContentPane(), "Login");
-
-                    // 停止客户端监听并重新初始化
-                    client.stopListening();
-                    try {
-                        client = new Client("localhost", 8888); // 重新初始化客户端
-                        client.addObserver(this);
-                        client.startListening();
-                    } catch (IOException e) {
-                        JOptionPane.showMessageDialog(frame, "无法重新连接到服务器：" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
-                    }
+                    doLogout(false);
                 }
             }
         }else if(message.startsWith("ONLINE:")|| message.startsWith("STATUS:")){
@@ -301,30 +290,7 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
             logoutBtn.addActionListener(e -> {
                 int confirm = JOptionPane.showConfirmDialog(frame, "确定要登出吗？", "登出确认", JOptionPane.YES_NO_OPTION);
                 if (confirm == JOptionPane.YES_OPTION) {
-                    try {
-                        if (client != null) {
-                            client.sendMessage("/logout");
-                            client.stopListening();
-                            client = new Client("localhost", 8888);
-                            client.addObserver(this);
-                            client.startListening();
-                        }
-                    } catch (IOException ex) {
-                        JOptionPane.showMessageDialog(frame, "无法重新连接到服务器：" + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
-                    }
-                    // 清理状态
-                    sessionLastMsg.clear();
-                    sessionIsGroup.clear();
-                    mainPanel = null;
-                    mainCardLayout = null;
-                    messageListPanel = null;
-                    friendsUI = null;
-                    groupUI = null;
-                    historyUI = null;
-                    currentUser = null;
-                    // 返回登录界面
-                    CardLayout cl = (CardLayout) frame.getContentPane().getLayout();
-                    cl.show(frame.getContentPane(), "Login");
+                    doLogout(true);
                 }
             });
 
@@ -446,6 +412,36 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
         // 返回当前已打开的群聊窗口数和私聊窗口数之和
         return (friendsUI != null ? friendsUI.getOpenChatWindowCount() : 0) +
                (groupUI != null ? groupUI.getOpenChatWindowCount() : 0);
+    }
+
+    // 登出逻辑，sendLogout为true时发送/logout指令
+    private void doLogout(boolean sendLogout) {
+        try {
+            if (client != null) {
+                if (sendLogout) {
+                    client.sendMessage("/logout");
+                }
+                client.stopListening();
+                client = new Client("localhost", 8888);
+                client.addObserver(this);
+                client.startListening();
+            }
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(frame, "无法重新连接到服务器：" + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+        }
+        // 清理状态
+        sessionLastMsg.clear();
+        sessionIsGroup.clear();
+        mainPanel = null;
+        mainCardLayout = null;
+        messageListPanel = null;
+        friendsUI = null;
+        groupUI = null;
+        historyUI = null;
+        currentUser = null;
+        // 返回登录界面
+        CardLayout cl = (CardLayout) frame.getContentPane().getLayout();
+        cl.show(frame.getContentPane(), "Login");
     }
 }
 
