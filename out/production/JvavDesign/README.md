@@ -1,7 +1,8 @@
 # JvavDesign
 The course-design of java
 ## 提交说明
-- 目前最新分支已合并至main。
+- 目前最新分支位于v3！接下来都提交到这里。
+- 建议养成及时pull和push的好习惯。
 - 对于分工中所示的每一个子版本，请自建其他分支，待该版本完成后再合并到main。
 - 提交遇到冲突时，请务必谨慎处理。不确定如何保留代码时，请及时与其他相关开发者沟通。
 ## 进展描述
@@ -12,8 +13,6 @@ The course-design of java
   - 控制台版：SimpleClient.java
   - UI版：com/chat/ui/ChatAPP.java
 ## BUG描述
-- 异地登录存在小bug，表现为第三台设备无法挤掉第二台设备。
-- UI界面没反应时请查看控制台exception输出，一般是出现异常了（如Client 57行左右引起的，概率10%，未解决）。
 ## 后续工作注意事项
 - UI是第二位的，功能是第一位的。功能可以参考ClientHandler.java中的“指令”思路。
 - 完成功能后，也请完成相应的UI。

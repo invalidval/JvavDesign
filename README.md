@@ -13,8 +13,6 @@ The course-design of java
   - 控制台版：SimpleClient.java
   - UI版：com/chat/ui/ChatAPP.java
 ## BUG描述
-- 异地登录存在小bug，表现为第三台设备无法挤掉第二台设备。
-- UI界面没反应时请查看控制台exception输出，一般是出现异常了（如Client 57行左右引起的，概率10%，未解决）。
 ## 后续工作注意事项
 - UI是第二位的，功能是第一位的。功能可以参考ClientHandler.java中的“指令”思路。
 - 完成功能后，也请完成相应的UI。
