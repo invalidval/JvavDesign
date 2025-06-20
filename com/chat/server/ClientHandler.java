@@ -87,7 +87,27 @@ public class ClientHandler extends Thread implements UserObserver {
                         showRecentMessagesOnLogin(); // 显示历史消息
 
                     } else if (loginStatus == UserDatabase.LOGIN_ALREADY_ONLINE) {
-                        out.println("ERROR: 该用户已在线，不允许重复登录。");
+                        // 异地登录处理：踢掉旧连接，允许新连接登录
+                        System.out.println("【ClientHandler】处理异地登录: " + tryUsername);
+
+                        this.username = tryUsername;
+                        User user = UserDatabase.getUser(username);
+                        if (user != null) {
+                            user.addObserver(this); // ✅ 注册观察者
+                        }
+
+                        // 强制设置用户在线状态并添加新连接（会自动踢掉旧连接）
+                        user.setOnline(true);
+                        UserDatabase.saveUsersToFile();
+                        Server.addClient(username, this);
+                        loggedIn = true;
+                        out.println("SUCCESS: 登录成功！您的账号已从其他设备下线。");
+
+                        showRecentMessagesOnLogin(); // 显示历史消息
+
+                        // 通知好友用户上线
+                        UserDatabase.notifyFriendsStatusChange(username, true);
+
                     } else if (loginStatus == UserDatabase.LOGIN_PASSWORD_ERROR) {
                         out.println("ERROR: 密码错误，请重试。");
                     } else if (loginStatus == UserDatabase.LOGIN_USER_NOT_FOUND) {
@@ -100,7 +120,7 @@ public class ClientHandler extends Thread implements UserObserver {
                     out.println("请先注册或登录！");
                 }
             }
-            
+
             String message;
             while ((username != null) && (message = in.readLine()) != null) {
                 String command = message.startsWith("/") ? message.split("\\s+")[0].toUpperCase() : "DEFAULT";
@@ -134,13 +154,11 @@ public class ClientHandler extends Thread implements UserObserver {
         }
     }
 
-    
     @Override
     public void onUserStatusChanged(User user) {
         // 好友上线/下线时回调，发送状态更新
         send("STATUS:" + user.getName() + ":" + (user.isOnline() ? "online" : "offline"));
     }
-
 
     /**
      * 发送消息给客户端，线程安全
@@ -163,7 +181,6 @@ public class ClientHandler extends Thread implements UserObserver {
             System.out.println("【forceDisconnect】关闭Socket错误: " + e.getMessage());
         }
     }
-
 
     /**
      * 登录时显示最近的消息记录
@@ -442,7 +459,7 @@ public class ClientHandler extends Thread implements UserObserver {
             if (group.getMembers().contains(UserDatabase.getUser(username))) {
                 handler.send("ERROR: 你已在该群聊中");
                 return;
-}
+            }
             group.getMembers().add(UserDatabase.getUser(username));
             group.notifyObservers(); // 通知观察者更新群聊状态
             handler.send("SUCCESS: 加入群聊成功");
@@ -539,7 +556,8 @@ public class ClientHandler extends Thread implements UserObserver {
                 boolean isGroup = dis.readBoolean();
 
                 // 创建存储目录
-                String storagePath = "files/" + (isGroup ? "groups/" + targetId : "private/" + username + "_" + targetId) + "/";
+                String storagePath = "files/"
+                        + (isGroup ? "groups/" + targetId : "private/" + username + "_" + targetId) + "/";
                 new File(storagePath).mkdirs();
                 String filePath = storagePath + fileName;
                 String fileId = UUID.randomUUID().toString();
@@ -550,8 +568,9 @@ public class ClientHandler extends Thread implements UserObserver {
                     long remaining = fileSize;
 
                     while (remaining > 0) {
-                        int bytesRead = dis.read(buffer, 0, (int)Math.min(buffer.length, remaining));
-                        if (bytesRead == -1) break;
+                        int bytesRead = dis.read(buffer, 0, (int) Math.min(buffer.length, remaining));
+                        if (bytesRead == -1)
+                            break;
                         fos.write(buffer, 0, bytesRead);
                         remaining -= bytesRead;
                     }

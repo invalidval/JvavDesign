@@ -88,7 +88,16 @@ public class UserDatabase {
             return LOGIN_PASSWORD_ERROR;
         }
 
-        // 漫游功能：用户状态设为在线（实际的踢用户逻辑在Server.addClient中处理）
+        // 检查用户是否已经在线（通过Server检查实际连接状态）
+        boolean isActuallyOnline = com.chat.server.Server.getClientHandler(username) != null;
+
+        if (isActuallyOnline) {
+            // 用户已在线，需要踢下线处理，返回特殊状态码
+            System.out.println("【loginUser】用户 " + username + " 已在线，准备踢下线处理");
+            return LOGIN_ALREADY_ONLINE;
+        }
+
+        // 用户不在线，正常登录
         user.setOnline(true);
         saveUsersToFile();
         // 主动通知所有在线好友该用户上线
@@ -109,7 +118,7 @@ public class UserDatabase {
     }
 
     // 主动通知所有在线好友该用户上线/下线
-    private static void notifyFriendsStatusChange(String username, boolean online) {
+    public static void notifyFriendsStatusChange(String username, boolean online) {
         User user = users.get(username);
         if (user == null)
             return;
@@ -157,7 +166,7 @@ public class UserDatabase {
         return false;
     }
 
-    private static void saveUsersToFile() {
+    public static void saveUsersToFile() {
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             DocumentBuilder builder = factory.newDocumentBuilder();
