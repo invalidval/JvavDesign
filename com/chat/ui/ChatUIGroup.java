@@ -2,6 +2,7 @@ package com.chat.ui;
 
 import com.chat.client.Client;
 import com.chat.client.MessageObserver;
+import com.chat.file.FileTransferListener;
 import com.chat.file.FileTransferManager;
 
 import javax.swing.*;
@@ -186,6 +187,23 @@ public class ChatUIGroup implements MessageObserver {
             requestGroupList(); // 刷新群聊列表
         } else if (message.startsWith("ERROR: 加入群聊失败")) { // 新增处理加入群聊失败的消息
             JOptionPane.showMessageDialog(parentFrame, message, "错误", JOptionPane.ERROR_MESSAGE);
+        }else if (message.startsWith("FILE_NOTIFY:")) {
+            String[] parts = message.split(":");
+            String fileId = parts[1];
+            String fileName = parts[2];
+            long fileSize = Long.parseLong(parts[3]);
+            String sender = parts[4];
+            String targetId = parts[5]; // 群名
+
+            // 打开或创建群聊窗口
+            GroupChatWindow win = groupChats.computeIfAbsent(targetId, gn -> {
+                GroupChatWindow w = new GroupChatWindow(gn);
+                w.setVisible(true);
+                return w;
+            });
+
+            // 在群聊窗口中显示文件接收提示
+            win.showFileReceiveDialog(fileId, fileName, fileSize, sender);
         }
     }
 
@@ -264,6 +282,41 @@ public class ChatUIGroup implements MessageObserver {
 
         public void appendMessage(String msg) {
             chatArea.append(msg + "\n");
+        }
+
+        public void showFileReceiveDialog(String fileId, String fileName, long fileSize, String sender) {
+            appendMessage(sender + " 发送了文件: " + fileName);
+            int option = JOptionPane.showConfirmDialog(this,
+                    sender + " 发送了文件: " + fileName + "\n是否下载?",
+                    "收到文件",
+                    JOptionPane.YES_NO_OPTION);
+
+            if (option == JOptionPane.YES_OPTION) {
+                JFileChooser fileChooser = new JFileChooser();
+                fileChooser.setSelectedFile(new File(fileName));
+                if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                    String savePath = fileChooser.getSelectedFile().getPath();
+                    FileTransferManager.downloadFile(client.getSocket(), fileId, savePath,
+                            new FileTransferListener() {
+                                @Override
+                                public void onProgress(int percentage) {}
+
+                                @Override
+                                public void onComplete(String filePath) {
+                                    appendMessage(sender + " 发送的文件已下载完成: " + fileName);
+                                    JOptionPane.showMessageDialog(GroupChatWindow.this, "文件下载完成!");
+                                }
+
+                                @Override
+                                public void onError(String error) {
+                                    JOptionPane.showMessageDialog(GroupChatWindow.this,
+                                            "下载失败: " + error,
+                                            "错误",
+                                            JOptionPane.ERROR_MESSAGE);
+                                }
+                            });
+                }
+            }
         }
     }
 }

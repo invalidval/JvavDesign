@@ -529,60 +529,92 @@ public class ClientHandler extends Thread implements UserObserver {
     class FileReceiveHandler implements MessageHandlerStrategy {
         @Override
         public void handle(String message, ClientHandler handler) {
+            System.out.println("接收到文件上传请求: ");
             try {
-                DataInputStream dis = new DataInputStream(socket.getInputStream());
+                // 解析文件信息
+                String[] parts = message.trim().split("\\s+");
+                String fileName = parts[1];
+                long fileSize = Long.parseLong(parts[2]);
+                String targetUser = parts[3];
+                boolean isGroup = Boolean.parseBoolean(parts[4]);
 
-                // 读取文件元数据
-                String fileName = dis.readUTF();
-                long fileSize = dis.readLong();
-                String targetId = dis.readUTF();
-                boolean isGroup = dis.readBoolean();
-
-                // 创建存储目录
-                String storagePath = "files/" + (isGroup ? "groups/" + targetId : "private/" + username + "_" + targetId) + "/";
-                new File(storagePath).mkdirs();
-                String filePath = storagePath + fileName;
-                String fileId = UUID.randomUUID().toString();
-
-                // 接收并存储文件
-                try (FileOutputStream fos = new FileOutputStream(filePath)) {
-                    byte[] buffer = new byte[4096];
-                    long remaining = fileSize;
-
-                    while (remaining > 0) {
-                        int bytesRead = dis.read(buffer, 0, (int)Math.min(buffer.length, remaining));
-                        if (bytesRead == -1) break;
-                        fos.write(buffer, 0, bytesRead);
-                        remaining -= bytesRead;
+                // 创建目标目录
+                String basePath = isGroup ? "files/groups/" : "files/private/";
+                String dirPath = basePath + (isGroup ? targetUser : username + "_" + targetUser);
+                File dir = new File(dirPath);
+                if (!dir.exists()) {
+                    boolean created = dir.mkdirs(); // 检查目录创建是否成功
+                    if (!created) {
+                        System.err.println("无法创建目录: " + dirPath);
+                        handler.send("ERROR: 无法创建文件目录");
+                        return;
                     }
                 }
 
-                // 保存文件信息
-                FileInfo fileInfo = new FileInfo(fileId, fileName, fileSize, username, targetId, isGroup, filePath);
+                // 生成文件ID和保存路径
+                String fileId = UUID.randomUUID().toString();
+                String filePath = dirPath + "/" + fileName;
+                File file = new File(filePath);
+                System.out.println("正在保存文件到: " + filePath); // 添加日志
+
+                // 接收文件数据
+                FileOutputStream fos = new FileOutputStream(file);
+                InputStream in = socket.getInputStream();
+                byte[] buffer = new byte[8192];
+                long remainingBytes = fileSize;
+
+                while (remainingBytes > 0) {
+                    int read = in.read(buffer, 0, (int) Math.min(buffer.length, remainingBytes));
+                    if (read == -1) break;
+                    fos.write(buffer, 0, read);
+                    remainingBytes -= read;
+                }
+
+                fos.close();
+
+                // 按照正确的构造函数参数顺序创建FileInfo对象
+                FileInfo fileInfo = new FileInfo(
+                        fileId,          // String fileId
+                        fileName,        // String fileName
+                        fileSize,        // long fileSize
+                        username,        // String sender
+                        targetUser,      // String receiver
+                        isGroup,         // boolean isGroup
+                        filePath        // String filePath
+                );
+
                 FileDatabase.addFile(fileInfo);
 
-                // 通知目标用户
+                // 发送文件通知
+                String notifyMsg = String.format("FILE_NOTIFY:%s:%s:%d:%s:%s:%s",
+                        fileId, fileName, fileSize, username, targetUser, isGroup ? "group" : "private");
+
                 if (isGroup) {
-                    Set<String> members = GroupDatabase.getGroupMembers(targetId);
-                    for (String member : members) {
-                        ClientHandler memberHandler = Server.getClientHandler(member);
-                        if (memberHandler != null) {
-                            memberHandler.send("FILE_NOTIFY:" + fileId + ":" + fileName + ":" + fileSize + ":" +
-                                    username + ":" + targetId + ":group");
+                    // 群文件，通知所有群成员
+                    Set<String> members = GroupDatabase.getGroupMembers(targetUser);
+                    if (members != null) {
+                        for (String member : members) {
+                            if (!member.equals(username)) {
+                                ClientHandler memberHandler = Server.getClientHandler(member);
+                                if (memberHandler != null) {
+                                    memberHandler.send(notifyMsg);
+                                }
+                            }
                         }
                     }
                 } else {
-                    ClientHandler receiverHandler = Server.getClientHandler(targetId);
-                    if (receiverHandler != null) {
-                        receiverHandler.send("FILE_NOTIFY:" + fileId + ":" + fileName + ":" + fileSize + ":" +
-                                username + ":" + targetId + ":private");
+                    // 私聊文件，只通知目标用户
+                    ClientHandler targetHandler = Server.getClientHandler(targetUser);
+                    if (targetHandler != null) {
+                        targetHandler.send(notifyMsg);
                     }
                 }
 
-                handler.send("SUCCESS:文件上传成功");
+                handler.send("SUCCESS: 文件上传成功");
 
             } catch (IOException e) {
-                handler.send("ERROR:文件上传失败: " + e.getMessage());
+                e.printStackTrace();
+                handler.send("ERROR: 文件上传失败: " + e.getMessage());
             }
         }
     }
@@ -590,6 +622,7 @@ public class ClientHandler extends Thread implements UserObserver {
     class FileDownloadHandler implements MessageHandlerStrategy {
         @Override
         public void handle(String message, ClientHandler handler) {
+            System.out.println("接收到文件下载请求: " + message);
             try {
                 String[] parts = message.split(" ", 2);
                 if (parts.length < 2) {
@@ -627,6 +660,7 @@ public class ClientHandler extends Thread implements UserObserver {
 
             } catch (IOException e) {
                 handler.send("ERROR:文件下载失败: " + e.getMessage());
+                System.out.println("文件下载处理异常: " + e.getMessage());
             }
         }
     }
