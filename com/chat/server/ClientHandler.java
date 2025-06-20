@@ -11,7 +11,7 @@ import com.chat.server.UserDatabase;
 import com.chat.server.GroupDatabase;
 import com.chat.server.MessageStorage;
 
-public class ClientHandler implements Runnable {
+public class ClientHandler extends Thread implements UserObserver {
     private Socket socket;
     private BufferedReader in;
     private PrintWriter out;
@@ -40,7 +40,6 @@ public class ClientHandler implements Runnable {
         handlerStrategies.put("DEFAULT", new DefaultMessageHandler());
     }
 
-    @Override
     public void run() {
         boolean loggedIn = false;
         try {
@@ -49,6 +48,7 @@ public class ClientHandler implements Runnable {
 
                 if (initialMessage == null)
                     break;
+
                 if (initialMessage.startsWith("/r")) {
                     String[] parts = initialMessage.trim().split("\\s+");
                     if (parts.length < 3) {
@@ -62,23 +62,29 @@ public class ClientHandler implements Runnable {
                     } else {
                         out.println("ERROR: 用户名已存在，请尝试其他用户名。");
                     }
+
                 } else if (initialMessage.startsWith("/l")) {
                     String[] parts = initialMessage.trim().split("\\s+");
                     if (parts.length < 3) {
                         out.println("ERROR: 格式为 /l 用户名 密码");
                         continue;
                     }
-                    String username = parts[1];
+                    String tryUsername = parts[1];
                     String password = parts[2];
-                    int loginStatus = UserDatabase.loginUser(username, password);
+                    int loginStatus = UserDatabase.loginUser(tryUsername, password);
+
                     if (loginStatus == UserDatabase.LOGIN_SUCCESS) {
-                        this.username = username;
+                        this.username = tryUsername;
+                        User user = UserDatabase.getUser(username);
+                        if (user != null) {
+                            user.addObserver(this); // ✅ 注册观察者
+                        }
+
                         Server.addClient(username, this);
                         loggedIn = true;
                         out.println("SUCCESS: 登录成功！您可以开始聊天了。");
 
-                        // 显示最近的消息记录
-                        showRecentMessagesOnLogin();
+                        showRecentMessagesOnLogin(); // 显示历史消息
 
                     } else if (loginStatus == UserDatabase.LOGIN_ALREADY_ONLINE) {
                         out.println("ERROR: 该用户已在线，不允许重复登录。");
@@ -89,25 +95,20 @@ public class ClientHandler implements Runnable {
                     } else {
                         out.println("ERROR: 登录失败。");
                     }
+
                 } else {
-                    // 未登录时，所有非注册/登录命令都直接提示，不做任何数据库操作
                     out.println("请先注册或登录！");
                 }
             }
-
-            // 只有登录后才允许执行其他命令
+            
             String message;
-            while ((message = in.readLine()) != null) {
-                if (username == null) {
-                    // 理论上不会到这里，但保险起见
-                    out.println("请先注册或登录！");
-                    continue;
-                }
+            while ((username != null) && (message = in.readLine()) != null) {
                 String command = message.startsWith("/") ? message.split("\\s+")[0].toUpperCase() : "DEFAULT";
                 MessageHandlerStrategy strategy = handlerStrategies.getOrDefault(command,
                         handlerStrategies.get("DEFAULT"));
                 strategy.handle(message, this);
             }
+
         } catch (IOException e) {
             out.println(username + " 已断开连接");
         } finally {
@@ -118,6 +119,12 @@ public class ClientHandler implements Runnable {
                 } else {
                     System.out.println("【finally】当前不是最新连接，跳过 removeClient");
                 }
+
+                // ✅ 注销观察者
+                User user = UserDatabase.getUser(username);
+                if (user != null) {
+                    user.removeObserver(this);
+                }
             }
             try {
                 socket.close();
@@ -126,6 +133,14 @@ public class ClientHandler implements Runnable {
             }
         }
     }
+
+    
+    @Override
+    public void onUserStatusChanged(User user) {
+        // 好友上线/下线时回调，发送状态更新
+        send("STATUS:" + user.getName() + ":" + (user.isOnline() ? "online" : "offline"));
+    }
+
 
     /**
      * 发送消息给客户端，线程安全
@@ -142,23 +157,13 @@ public class ClientHandler implements Runnable {
     public void forceDisconnect() {
         System.out.println("【forceDisconnect】开始执行，username=" + username);
         try {
-            if (username != null) {
-                User user = UserDatabase.getUser(username);
-                if (user != null) {
-                    user.setOnline(false);
-                }
-            }
-        } catch (Exception e) {
-            System.out.println("【forceDisconnect】错误: " + e.getMessage());
-        } finally {
-            try {
-                socket.close();
-                System.out.println("【forceDisconnect】socket.close() 执行完成");
-            } catch (IOException e) {
-                System.out.println("【forceDisconnect】关闭Socket错误: " + e.getMessage());
-            }
+            socket.close();
+            System.out.println("【forceDisconnect】socket.close() 执行完成");
+        } catch (IOException e) {
+            System.out.println("【forceDisconnect】关闭Socket错误: " + e.getMessage());
         }
     }
+
 
     /**
      * 登录时显示最近的消息记录

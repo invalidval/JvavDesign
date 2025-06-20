@@ -4,11 +4,6 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 
-// 观察者模式接口（包内可见）
-interface UserObserver {
-    void onUserStatusChanged(User user);
-}
-
 interface UserSubject {
     void addObserver(UserObserver observer);
     void removeObserver(UserObserver observer);
