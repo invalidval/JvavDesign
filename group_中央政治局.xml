@@ -45,4 +45,7 @@
   <message id="7" receiver="中央政治局" sender="1" timestamp="2025-06-20 12:52:02" type="GROUP">
     <content>？</content>
   </message>
+  <message id="6" receiver="中央政治局" sender="3" timestamp="2025-06-20 17:49:22" type="GROUP">
+    <content>你家</content>
+  </message>
 </messages>

@@ -57,7 +57,7 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
     }
 
     public ChatApp() {
-        frame = new JFrame("Chat Application");
+        frame = new JFrame("线上聊天室 Designed by 2023211310班 我们6个");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(700, 500);
         frame.setLayout(new CardLayout());
@@ -290,8 +290,51 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
             // 设置按钮弹出设置对话框
             settingsBtn.addActionListener(e -> showSettingsDialog());
 
+            // 右侧用户名和登出按钮
+            JPanel userPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+            JLabel userLabel = new JLabel("用户：" + currentUser);
+            JButton logoutBtn = new JButton("登出");
+            userPanel.add(userLabel);
+            userPanel.add(logoutBtn);
+
+            // 登出按钮逻辑
+            logoutBtn.addActionListener(e -> {
+                int confirm = JOptionPane.showConfirmDialog(frame, "确定要登出吗？", "登出确认", JOptionPane.YES_NO_OPTION);
+                if (confirm == JOptionPane.YES_OPTION) {
+                    try {
+                        if (client != null) {
+                            client.sendMessage("/logout");
+                            client.stopListening();
+                            client = new Client("localhost", 8888);
+                            client.addObserver(this);
+                            client.startListening();
+                        }
+                    } catch (IOException ex) {
+                        JOptionPane.showMessageDialog(frame, "无法重新连接到服务器：" + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    }
+                    // 清理状态
+                    sessionLastMsg.clear();
+                    sessionIsGroup.clear();
+                    mainPanel = null;
+                    mainCardLayout = null;
+                    messageListPanel = null;
+                    friendsUI = null;
+                    groupUI = null;
+                    historyUI = null;
+                    currentUser = null;
+                    // 返回登录界面
+                    CardLayout cl = (CardLayout) frame.getContentPane().getLayout();
+                    cl.show(frame.getContentPane(), "Login");
+                }
+            });
+
+            // 顶部整体栏（左导航+右用户信息）
+            JPanel topBar = new JPanel(new BorderLayout());
+            topBar.add(navBar, BorderLayout.WEST);
+            topBar.add(userPanel, BorderLayout.EAST);
+
             JPanel container = new JPanel(new BorderLayout());
-            container.add(navBar, BorderLayout.NORTH);
+            container.add(topBar, BorderLayout.NORTH);
             container.add(mainPanel, BorderLayout.CENTER);
 
             frame.add(container, "Main");
