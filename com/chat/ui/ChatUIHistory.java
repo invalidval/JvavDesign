@@ -70,9 +70,11 @@ public class ChatUIHistory implements MessageObserver {
     @Override
     public void onMessageReceived(String message) {
         if (message == null) return;
-        if (message.startsWith("=== 最近") || message.startsWith("=== 与")||message.startsWith("=== 群聊")) {
+
+        if(message.startsWith("===")){
             historyArea.setText(""); // 清空历史记录区域
         }
+
         historyArea.append(message + "\n");
     }
 }

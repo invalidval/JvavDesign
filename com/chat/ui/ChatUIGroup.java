@@ -2,9 +2,14 @@ package com.chat.ui;
 
 import com.chat.client.Client;
 import com.chat.client.MessageObserver;
+import com.chat.file.FileTransferManager;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.io.File;
+import java.io.IOException;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -218,6 +223,34 @@ public class ChatUIGroup implements MessageObserver {
             add(inputPanel, BorderLayout.SOUTH);
 
             // 可扩展：显示群成员列表
+            //新增文件上传功能
+            JButton fileButton = new JButton("发送文件");
+            fileButton.addActionListener(e -> {
+                JFileChooser fileChooser = new JFileChooser();
+                if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                    File selectedFile = fileChooser.getSelectedFile();
+                    try {
+                        FileTransferManager.uploadFile(client.getSocket(), selectedFile, groupName, true);
+                        appendMessage("我: 发送文件 " + selectedFile.getName());
+                        JOptionPane.showMessageDialog(this, "文件发送成功!");
+                    } catch (IOException ex) {
+                        JOptionPane.showMessageDialog(this,
+                                "文件发送失败: " + ex.getMessage(),
+                                "错误",
+                                JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            });
+
+            JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+            buttonPanel.add(fileButton);
+            // 修改inputPanel的添加方式
+            JPanel bottomPanel = new JPanel(new BorderLayout());
+            bottomPanel.add(buttonPanel, BorderLayout.NORTH);
+            bottomPanel.add(inputPanel, BorderLayout.CENTER);
+
+            add(bottomPanel, BorderLayout.SOUTH);
+
         }
 
         private void sendMessage() {

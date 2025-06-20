@@ -2,16 +2,16 @@ package com.chat.server;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+
+import com.chat.file.FileDatabase;
+import com.chat.file.FileInfo;
 import com.chat.model.*;
 import com.chat.server.UserDatabase;
 import com.chat.server.GroupDatabase;
 import com.chat.server.MessageStorage;
 
-public class ClientHandler implements Runnable {
+public class ClientHandler extends Thread implements UserObserver {
     private Socket socket;
     private BufferedReader in;
     private PrintWriter out;
@@ -35,10 +35,11 @@ public class ClientHandler implements Runnable {
         handlerStrategies.put("/H", new HistoryMessageHandler()); // 历史消息查询
         handlerStrategies.put("/JG", new JoinGroupHandler()); // 新增加入群聊处理器
         handlerStrategies.put("/HG", new GroupHistoryMessageHandler()); // 新增群聊历史消息查询
+        handlerStrategies.put("/FILE", new FileReceiveHandler());// 添加文件处理器注册
+        handlerStrategies.put("/DOWNLOAD", new FileDownloadHandler());
         handlerStrategies.put("DEFAULT", new DefaultMessageHandler());
     }
 
-    @Override
     public void run() {
         boolean loggedIn = false;
         try {
@@ -47,6 +48,7 @@ public class ClientHandler implements Runnable {
 
                 if (initialMessage == null)
                     break;
+
                 if (initialMessage.startsWith("/r")) {
                     String[] parts = initialMessage.trim().split("\\s+");
                     if (parts.length < 3) {
@@ -60,23 +62,29 @@ public class ClientHandler implements Runnable {
                     } else {
                         out.println("ERROR: 用户名已存在，请尝试其他用户名。");
                     }
+
                 } else if (initialMessage.startsWith("/l")) {
                     String[] parts = initialMessage.trim().split("\\s+");
                     if (parts.length < 3) {
                         out.println("ERROR: 格式为 /l 用户名 密码");
                         continue;
                     }
-                    String username = parts[1];
+                    String tryUsername = parts[1];
                     String password = parts[2];
-                    int loginStatus = UserDatabase.loginUser(username, password);
+                    int loginStatus = UserDatabase.loginUser(tryUsername, password);
+
                     if (loginStatus == UserDatabase.LOGIN_SUCCESS) {
-                        this.username = username;
+                        this.username = tryUsername;
+                        User user = UserDatabase.getUser(username);
+                        if (user != null) {
+                            user.addObserver(this); // ✅ 注册观察者
+                        }
+
                         Server.addClient(username, this);
                         loggedIn = true;
                         out.println("SUCCESS: 登录成功！您可以开始聊天了。");
 
-                        // 显示最近的消息记录
-                        showRecentMessagesOnLogin();
+                        showRecentMessagesOnLogin(); // 显示历史消息
 
                     } else if (loginStatus == UserDatabase.LOGIN_ALREADY_ONLINE) {
                         out.println("ERROR: 该用户已在线，不允许重复登录。");
@@ -87,62 +95,75 @@ public class ClientHandler implements Runnable {
                     } else {
                         out.println("ERROR: 登录失败。");
                     }
+
                 } else {
-                    // 未登录时，所有非注册/登录命令都直接提示，不做任何数据库操作
                     out.println("请先注册或登录！");
                 }
             }
-
-            // 只有登录后才允许执行其他命令
+            
             String message;
-            while ((message = in.readLine()) != null) {
-                if (username == null) {
-                    // 理论上不会到这里，但保险起见
-                    out.println("请先注册或登录！");
-                    continue;
-                }
+            while ((username != null) && (message = in.readLine()) != null) {
                 String command = message.startsWith("/") ? message.split("\\s+")[0].toUpperCase() : "DEFAULT";
                 MessageHandlerStrategy strategy = handlerStrategies.getOrDefault(command,
                         handlerStrategies.get("DEFAULT"));
                 strategy.handle(message, this);
             }
+
         } catch (IOException e) {
             out.println(username + " 已断开连接");
         } finally {
             if (username != null) {
-                Server.removeClient(username);
+                ClientHandler current = Server.getClient(username);
+                if (current == this) {
+                    Server.removeClient(username);
+                } else {
+                    System.out.println("【finally】当前不是最新连接，跳过 removeClient");
+                }
+
+                // ✅ 注销观察者
+                User user = UserDatabase.getUser(username);
+                if (user != null) {
+                    user.removeObserver(this);
+                }
             }
             try {
                 socket.close();
             } catch (IOException e) {
-                e.printStackTrace();
+                System.out.println("【finally】关闭Socket错误: " + e.getMessage());
             }
         }
     }
 
+    
+    @Override
+    public void onUserStatusChanged(User user) {
+        // 好友上线/下线时回调，发送状态更新
+        send("STATUS:" + user.getName() + ":" + (user.isOnline() ? "online" : "offline"));
+    }
+
+
+    /**
+     * 发送消息给客户端，线程安全
+     */
     public void send(String message) {
-        synchronized (out) { // 确保输出流的线程安全
+        synchronized (out) {
             out.println(message);
         }
     }
 
     /**
-     * 强制断开客户端连接
+     * 强制断开客户端连接（不移除，交由 run() 的 finally 处理）
      */
     public void forceDisconnect() {
+        System.out.println("【forceDisconnect】开始执行，username=" + username);
         try {
-            if (username != null) {
-                User user = UserDatabase.getUser(username);
-                if (user != null) {
-                    user.setOnline(false);
-                }
-                Server.removeClient(username);
-            }
             socket.close();
+            System.out.println("【forceDisconnect】socket.close() 执行完成");
         } catch (IOException e) {
-            System.out.println("强制断开连接时发生错误: " + e.getMessage());
+            System.out.println("【forceDisconnect】关闭Socket错误: " + e.getMessage());
         }
     }
+
 
     /**
      * 登录时显示最近的消息记录
@@ -155,7 +176,7 @@ public class ClientHandler implements Runnable {
             for (int i = messages.size() - 1; i >= 0; i--) {
                 out.println(messages.get(i).toString());
             }
-            out.println("==================");
+
         }
     }
 
@@ -367,7 +388,7 @@ public class ClientHandler implements Runnable {
         private void showRecentMessages(ClientHandler handler, int count) {
             var messages = MessageStorage.getUserMessages(username, count);
             if (messages.isEmpty()) {
-                handler.send("暂无消息记录");
+                handler.send("=== 暂无消息记录 ===");
                 return;
             }
 
@@ -376,13 +397,13 @@ public class ClientHandler implements Runnable {
             for (int i = messages.size() - 1; i >= 0; i--) {
                 handler.send(messages.get(i).toString());
             }
-            handler.send("==================");
+
         }
 
         private void showPrivateMessages(ClientHandler handler, String targetUser, int count) {
             var messages = MessageStorage.getPrivateMessages(username, targetUser, count);
             if (messages.isEmpty()) {
-                handler.send("与 " + targetUser + " 暂无私聊记录");
+                handler.send("=== 与 " + targetUser + " 暂无私聊记录 ===");
                 return;
             }
 
@@ -390,7 +411,7 @@ public class ClientHandler implements Runnable {
             for (var msg : messages) {
                 handler.send(msg.toString());
             }
-            handler.send("==================");
+
         }
     }
 
@@ -481,27 +502,132 @@ public class ClientHandler implements Runnable {
         private void showGroupMessages(ClientHandler handler, String groupName, int count) {
             var messages = MessageStorage.getGroupMessages(groupName, count);
             if (messages.isEmpty()) {
-                handler.send("群聊 " + groupName + " 暂无消息记录");
+                handler.send("=== 群聊 " + groupName + " 暂无消息记录 ===");
                 return;
             }
             handler.send("=== 群聊 " + groupName + " 的消息记录 (" + messages.size() + " 条) ===");
             for (var msg : messages) {
                 handler.send(msg.toString());
             }
-            handler.send("==================");
+
         }
 
         private void showGroupMemberMessages(ClientHandler handler, String groupName, String member, int count) {
             var messages = MessageStorage.getGroupMemberMessages(groupName, member, count);
             if (messages.isEmpty()) {
-                handler.send("群聊 " + groupName + " 中成员 " + member + " 暂无消息记录");
+                handler.send("=== 群聊 " + groupName + " 中成员 " + member + " 暂无消息记录 ===");
                 return;
             }
             handler.send("=== 群聊 " + groupName + " 中 " + member + " 的消息记录 (" + messages.size() + " 条) ===");
             for (var msg : messages) {
                 handler.send(msg.toString());
             }
-            handler.send("==================");
+
+        }
+    }
+
+    class FileReceiveHandler implements MessageHandlerStrategy {
+        @Override
+        public void handle(String message, ClientHandler handler) {
+            try {
+                DataInputStream dis = new DataInputStream(socket.getInputStream());
+
+                // 读取文件元数据
+                String fileName = dis.readUTF();
+                long fileSize = dis.readLong();
+                String targetId = dis.readUTF();
+                boolean isGroup = dis.readBoolean();
+
+                // 创建存储目录
+                String storagePath = "files/" + (isGroup ? "groups/" + targetId : "private/" + username + "_" + targetId) + "/";
+                new File(storagePath).mkdirs();
+                String filePath = storagePath + fileName;
+                String fileId = UUID.randomUUID().toString();
+
+                // 接收并存储文件
+                try (FileOutputStream fos = new FileOutputStream(filePath)) {
+                    byte[] buffer = new byte[4096];
+                    long remaining = fileSize;
+
+                    while (remaining > 0) {
+                        int bytesRead = dis.read(buffer, 0, (int)Math.min(buffer.length, remaining));
+                        if (bytesRead == -1) break;
+                        fos.write(buffer, 0, bytesRead);
+                        remaining -= bytesRead;
+                    }
+                }
+
+                // 保存文件信息
+                FileInfo fileInfo = new FileInfo(fileId, fileName, fileSize, username, targetId, isGroup, filePath);
+                FileDatabase.addFile(fileInfo);
+
+                // 通知目标用户
+                if (isGroup) {
+                    Set<String> members = GroupDatabase.getGroupMembers(targetId);
+                    for (String member : members) {
+                        ClientHandler memberHandler = Server.getClientHandler(member);
+                        if (memberHandler != null) {
+                            memberHandler.send("FILE_NOTIFY:" + fileId + ":" + fileName + ":" + fileSize + ":" +
+                                    username + ":" + targetId + ":group");
+                        }
+                    }
+                } else {
+                    ClientHandler receiverHandler = Server.getClientHandler(targetId);
+                    if (receiverHandler != null) {
+                        receiverHandler.send("FILE_NOTIFY:" + fileId + ":" + fileName + ":" + fileSize + ":" +
+                                username + ":" + targetId + ":private");
+                    }
+                }
+
+                handler.send("SUCCESS:文件上传成功");
+
+            } catch (IOException e) {
+                handler.send("ERROR:文件上传失败: " + e.getMessage());
+            }
+        }
+    }
+
+    class FileDownloadHandler implements MessageHandlerStrategy {
+        @Override
+        public void handle(String message, ClientHandler handler) {
+            try {
+                String[] parts = message.split(" ", 2);
+                if (parts.length < 2) {
+                    handler.send("ERROR:无效的下载请求");
+                    return;
+                }
+
+                String fileId = parts[1];
+                FileInfo fileInfo = FileDatabase.getFileInfo(fileId);
+                if (fileInfo == null) {
+                    handler.send("ERROR:文件不存在");
+                    return;
+                }
+
+                File file = new File(fileInfo.getPath());
+                if (!file.exists()) {
+                    handler.send("ERROR:文件不存在");
+                    return;
+                }
+
+                // 发送文件
+                DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
+                dos.writeUTF("FILE_DATA");
+                dos.writeUTF(fileInfo.getName());
+                dos.writeLong(file.length());
+
+                try (FileInputStream fis = new FileInputStream(file)) {
+                    byte[] buffer = new byte[4096];
+                    int bytesRead;
+                    while ((bytesRead = fis.read(buffer)) != -1) {
+                        dos.write(buffer, 0, bytesRead);
+                    }
+                    dos.flush();
+                }
+
+            } catch (IOException e) {
+                handler.send("ERROR:文件下载失败: " + e.getMessage());
+            }
         }
     }
 }

@@ -2,9 +2,12 @@ package com.chat.ui;
 
 import com.chat.client.Client;
 import com.chat.client.MessageObserver;
+import com.chat.file.FileTransferListener;
+import com.chat.file.FileTransferManager;
 
 import javax.swing.*;
 import java.awt.*;
+import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.List;
@@ -54,7 +57,7 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
     }
 
     public ChatApp() {
-        frame = new JFrame("Chat Application");
+        frame = new JFrame("线上聊天室 Designed by 2023211310班 我们6个");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(700, 500);
         frame.setLayout(new CardLayout());
@@ -183,23 +186,54 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
                 String statusCode = message.substring(statusCodeStart + 1, statusCodeEnd).trim();
                 if ("000".equals(statusCode)) {
                     JOptionPane.showMessageDialog(frame, "检测到异地登录，本客户端将下线！", "警告", JOptionPane.WARNING_MESSAGE);
-                    CardLayout cl = (CardLayout) frame.getContentPane().getLayout();
-                    cl.show(frame.getContentPane(), "Login");
-
-                    // 停止客户端监听并重新初始化
-                    client.stopListening();
-                    try {
-                        client = new Client("localhost", 8888); // 重新初始化客户端
-                        client.addObserver(this);
-                        client.startListening();
-                    } catch (IOException e) {
-                        JOptionPane.showMessageDialog(frame, "无法重新连接到服务器：" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
-                    }
+                    doLogout(false);
                 }
             }
         }else if(message.startsWith("ONLINE:")|| message.startsWith("STATUS:")){
             if (friendsUI != null) friendsUI.onMessageReceived(message);
 
+        }else if (message.startsWith("FILE_NOTIFY:")) {// 文件传输通知
+            // FILE_NOTIFY:fileId:fileName:fileSize:sender:targetId:type
+            String[] parts = message.split(":");
+            String fileId = parts[1];
+            String fileName = parts[2];
+            long fileSize = Long.parseLong(parts[3]);
+            String sender = parts[4];
+            String targetId = parts[5];
+            boolean isGroup = parts[6].equals("group");
+
+            // 弹出接收提示
+            int option = JOptionPane.showConfirmDialog(frame,
+                    sender + " 发送了文件: " + fileName + "\n是否下载?",
+                    "收到文件",
+                    JOptionPane.YES_NO_OPTION);
+
+            if (option == JOptionPane.YES_OPTION) {
+                JFileChooser fileChooser = new JFileChooser();
+                fileChooser.setSelectedFile(new File(fileName));
+                if (fileChooser.showSaveDialog(frame) == JFileChooser.APPROVE_OPTION) {
+                    String savePath = fileChooser.getSelectedFile().getPath();
+                    // 简化的下载监听器
+                    FileTransferManager.downloadFile(client.getSocket(), fileId, savePath,
+                            new FileTransferListener() {
+                                @Override
+                                public void onProgress(int percentage) {}
+
+                                @Override
+                                public void onComplete(String filePath) {
+                                    JOptionPane.showMessageDialog(frame, "文件下载完成!");
+                                }
+
+                                @Override
+                                public void onError(String error) {
+                                    JOptionPane.showMessageDialog(frame,
+                                            "下载失败: " + error,
+                                            "错误",
+                                            JOptionPane.ERROR_MESSAGE);
+                                }
+                            });
+                }
+            }
         }
     }
 
@@ -245,8 +279,28 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
             // 设置按钮弹出设置对话框
             settingsBtn.addActionListener(e -> showSettingsDialog());
 
+            // 右侧用户名和登出按钮
+            JPanel userPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+            JLabel userLabel = new JLabel("用户：" + currentUser);
+            JButton logoutBtn = new JButton("登出");
+            userPanel.add(userLabel);
+            userPanel.add(logoutBtn);
+
+            // 登出按钮逻辑
+            logoutBtn.addActionListener(e -> {
+                int confirm = JOptionPane.showConfirmDialog(frame, "确定要登出吗？", "登出确认", JOptionPane.YES_NO_OPTION);
+                if (confirm == JOptionPane.YES_OPTION) {
+                    doLogout(true);
+                }
+            });
+
+            // 顶部整体栏（左导航+右用户信息）
+            JPanel topBar = new JPanel(new BorderLayout());
+            topBar.add(navBar, BorderLayout.WEST);
+            topBar.add(userPanel, BorderLayout.EAST);
+
             JPanel container = new JPanel(new BorderLayout());
-            container.add(navBar, BorderLayout.NORTH);
+            container.add(topBar, BorderLayout.NORTH);
             container.add(mainPanel, BorderLayout.CENTER);
 
             frame.add(container, "Main");
@@ -358,6 +412,36 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
         // 返回当前已打开的群聊窗口数和私聊窗口数之和
         return (friendsUI != null ? friendsUI.getOpenChatWindowCount() : 0) +
                (groupUI != null ? groupUI.getOpenChatWindowCount() : 0);
+    }
+
+    // 登出逻辑，sendLogout为true时发送/logout指令
+    private void doLogout(boolean sendLogout) {
+        try {
+            if (client != null) {
+                if (sendLogout) {
+                    client.sendMessage("/logout");
+                }
+                client.stopListening();
+                client = new Client("localhost", 8888);
+                client.addObserver(this);
+                client.startListening();
+            }
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(frame, "无法重新连接到服务器：" + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+        }
+        // 清理状态
+        sessionLastMsg.clear();
+        sessionIsGroup.clear();
+        mainPanel = null;
+        mainCardLayout = null;
+        messageListPanel = null;
+        friendsUI = null;
+        groupUI = null;
+        historyUI = null;
+        currentUser = null;
+        // 返回登录界面
+        CardLayout cl = (CardLayout) frame.getContentPane().getLayout();
+        cl.show(frame.getContentPane(), "Login");
     }
 }
 

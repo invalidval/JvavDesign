@@ -2,20 +2,24 @@ package com.chat.client;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.ArrayList;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.List;
 
 public class Client implements MessageSubject {
     private Socket socket;
     private BufferedReader in;
     private PrintWriter out;
-    private List<MessageObserver> observers = new ArrayList<>();
+    private List<MessageObserver> observers = new CopyOnWriteArrayList<>();
     private volatile boolean listening = false;
 
     public Client(String host, int port) throws IOException {
         this.socket = new Socket(host, port);
         this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         this.out = new PrintWriter(socket.getOutputStream(), true);
+    }
+
+    public Socket getSocket() {
+        return socket;
     }
 
     public void sendMessage(String message) {

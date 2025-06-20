@@ -39,6 +39,9 @@ public class Server implements UserDatabase.UserDatabaseObserver {
     public static void main(String[] args) throws IOException {
         ServerSocket serverSocket = new ServerSocket(PORT);
         System.out.println("服务器已启动，等待客户端连接...");
+        // 创建文件存储目录
+        new File("files/groups/").mkdirs();
+        new File("files/private/").mkdirs();
         while (true) {
             Socket socket = serverSocket.accept();
             threadPool.execute(new ClientHandler(socket));
@@ -51,21 +54,43 @@ public class Server implements UserDatabase.UserDatabaseObserver {
         }
     }
 
+    /**
+     * 添加新的客户端连接，若已存在旧连接则强制踢掉
+     */
     public static void addClient(String name, ClientHandler handler) {
-        // 如果已经有同名用户在线，先踢掉旧连接
         ClientHandler existingHandler = clients.get(name);
+
         if (existingHandler != null && existingHandler != handler) {
+            System.out.println("【addClient】发现旧连接，准备踢出: " + existingHandler);
             existingHandler.send("SYSTEM: 您的账号在另一台设备上登录，当前连接将被断开。[000]");
-            existingHandler.forceDisconnect();
-            System.out.println("用户 " + name + " 的旧连接被踢下线（账号在其他设备登录）");
+            existingHandler.forceDisconnect(); // 会关闭 socket，使旧连接进入 finally 并 remove
+
+        } else {
+            System.out.println("【addClient】无旧连接或已是最新连接");
         }
 
         clients.put(name, handler);
+        System.out.println("【addClient】最终 clients 状态: " + clients.keySet());
     }
 
+    /**
+     * 移除客户端连接
+     */
     public static void removeClient(String name) {
-        clients.remove(name);
-        UserDatabase.logoutUser(name); // 确保下线状态同步
+        ClientHandler removed = clients.remove(name);
+        if (removed != null) {
+            UserDatabase.logoutUser(name);
+            System.out.println("【removeClient】移除用户: " + name + ", 剩余 clients: " + clients.keySet());
+        } else {
+            System.out.println("【removeClient】用户不存在或已移除: " + name);
+        }
+    }
+
+    /**
+     * 获取当前连接的 handler
+     */
+    public static ClientHandler getClient(String name) {
+        return clients.get(name);
     }
 
     public static void sendPrivateMessage(String sender, String receiver, String message) {
