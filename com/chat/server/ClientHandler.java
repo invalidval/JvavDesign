@@ -2,10 +2,10 @@ package com.chat.server;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+
+import com.chat.file.FileDatabase;
+import com.chat.file.FileInfo;
 import com.chat.model.*;
 import com.chat.server.UserDatabase;
 import com.chat.server.GroupDatabase;
@@ -35,6 +35,8 @@ public class ClientHandler implements Runnable {
         handlerStrategies.put("/H", new HistoryMessageHandler()); // 历史消息查询
         handlerStrategies.put("/JG", new JoinGroupHandler()); // 新增加入群聊处理器
         handlerStrategies.put("/HG", new GroupHistoryMessageHandler()); // 新增群聊历史消息查询
+        handlerStrategies.put("/FILE", new FileReceiveHandler());// 添加文件处理器注册
+        handlerStrategies.put("/DOWNLOAD", new FileDownloadHandler());
         handlerStrategies.put("DEFAULT", new DefaultMessageHandler());
     }
 
@@ -155,7 +157,7 @@ public class ClientHandler implements Runnable {
             for (int i = messages.size() - 1; i >= 0; i--) {
                 out.println(messages.get(i).toString());
             }
-            out.println("==================");
+
         }
     }
 
@@ -367,7 +369,7 @@ public class ClientHandler implements Runnable {
         private void showRecentMessages(ClientHandler handler, int count) {
             var messages = MessageStorage.getUserMessages(username, count);
             if (messages.isEmpty()) {
-                handler.send("暂无消息记录");
+                handler.send("=== 暂无消息记录 ===");
                 return;
             }
 
@@ -376,13 +378,13 @@ public class ClientHandler implements Runnable {
             for (int i = messages.size() - 1; i >= 0; i--) {
                 handler.send(messages.get(i).toString());
             }
-            handler.send("==================");
+
         }
 
         private void showPrivateMessages(ClientHandler handler, String targetUser, int count) {
             var messages = MessageStorage.getPrivateMessages(username, targetUser, count);
             if (messages.isEmpty()) {
-                handler.send("与 " + targetUser + " 暂无私聊记录");
+                handler.send("=== 与 " + targetUser + " 暂无私聊记录 ===");
                 return;
             }
 
@@ -390,7 +392,7 @@ public class ClientHandler implements Runnable {
             for (var msg : messages) {
                 handler.send(msg.toString());
             }
-            handler.send("==================");
+
         }
     }
 
@@ -481,27 +483,132 @@ public class ClientHandler implements Runnable {
         private void showGroupMessages(ClientHandler handler, String groupName, int count) {
             var messages = MessageStorage.getGroupMessages(groupName, count);
             if (messages.isEmpty()) {
-                handler.send("群聊 " + groupName + " 暂无消息记录");
+                handler.send("=== 群聊 " + groupName + " 暂无消息记录 ===");
                 return;
             }
             handler.send("=== 群聊 " + groupName + " 的消息记录 (" + messages.size() + " 条) ===");
             for (var msg : messages) {
                 handler.send(msg.toString());
             }
-            handler.send("==================");
+
         }
 
         private void showGroupMemberMessages(ClientHandler handler, String groupName, String member, int count) {
             var messages = MessageStorage.getGroupMemberMessages(groupName, member, count);
             if (messages.isEmpty()) {
-                handler.send("群聊 " + groupName + " 中成员 " + member + " 暂无消息记录");
+                handler.send("=== 群聊 " + groupName + " 中成员 " + member + " 暂无消息记录 ===");
                 return;
             }
             handler.send("=== 群聊 " + groupName + " 中 " + member + " 的消息记录 (" + messages.size() + " 条) ===");
             for (var msg : messages) {
                 handler.send(msg.toString());
             }
-            handler.send("==================");
+
+        }
+    }
+
+    class FileReceiveHandler implements MessageHandlerStrategy {
+        @Override
+        public void handle(String message, ClientHandler handler) {
+            try {
+                DataInputStream dis = new DataInputStream(socket.getInputStream());
+
+                // 读取文件元数据
+                String fileName = dis.readUTF();
+                long fileSize = dis.readLong();
+                String targetId = dis.readUTF();
+                boolean isGroup = dis.readBoolean();
+
+                // 创建存储目录
+                String storagePath = "files/" + (isGroup ? "groups/" + targetId : "private/" + username + "_" + targetId) + "/";
+                new File(storagePath).mkdirs();
+                String filePath = storagePath + fileName;
+                String fileId = UUID.randomUUID().toString();
+
+                // 接收并存储文件
+                try (FileOutputStream fos = new FileOutputStream(filePath)) {
+                    byte[] buffer = new byte[4096];
+                    long remaining = fileSize;
+
+                    while (remaining > 0) {
+                        int bytesRead = dis.read(buffer, 0, (int)Math.min(buffer.length, remaining));
+                        if (bytesRead == -1) break;
+                        fos.write(buffer, 0, bytesRead);
+                        remaining -= bytesRead;
+                    }
+                }
+
+                // 保存文件信息
+                FileInfo fileInfo = new FileInfo(fileId, fileName, fileSize, username, targetId, isGroup, filePath);
+                FileDatabase.addFile(fileInfo);
+
+                // 通知目标用户
+                if (isGroup) {
+                    Set<String> members = GroupDatabase.getGroupMembers(targetId);
+                    for (String member : members) {
+                        ClientHandler memberHandler = Server.getClientHandler(member);
+                        if (memberHandler != null) {
+                            memberHandler.send("FILE_NOTIFY:" + fileId + ":" + fileName + ":" + fileSize + ":" +
+                                    username + ":" + targetId + ":group");
+                        }
+                    }
+                } else {
+                    ClientHandler receiverHandler = Server.getClientHandler(targetId);
+                    if (receiverHandler != null) {
+                        receiverHandler.send("FILE_NOTIFY:" + fileId + ":" + fileName + ":" + fileSize + ":" +
+                                username + ":" + targetId + ":private");
+                    }
+                }
+
+                handler.send("SUCCESS:文件上传成功");
+
+            } catch (IOException e) {
+                handler.send("ERROR:文件上传失败: " + e.getMessage());
+            }
+        }
+    }
+
+    class FileDownloadHandler implements MessageHandlerStrategy {
+        @Override
+        public void handle(String message, ClientHandler handler) {
+            try {
+                String[] parts = message.split(" ", 2);
+                if (parts.length < 2) {
+                    handler.send("ERROR:无效的下载请求");
+                    return;
+                }
+
+                String fileId = parts[1];
+                FileInfo fileInfo = FileDatabase.getFileInfo(fileId);
+                if (fileInfo == null) {
+                    handler.send("ERROR:文件不存在");
+                    return;
+                }
+
+                File file = new File(fileInfo.getPath());
+                if (!file.exists()) {
+                    handler.send("ERROR:文件不存在");
+                    return;
+                }
+
+                // 发送文件
+                DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
+                dos.writeUTF("FILE_DATA");
+                dos.writeUTF(fileInfo.getName());
+                dos.writeLong(file.length());
+
+                try (FileInputStream fis = new FileInputStream(file)) {
+                    byte[] buffer = new byte[4096];
+                    int bytesRead;
+                    while ((bytesRead = fis.read(buffer)) != -1) {
+                        dos.write(buffer, 0, bytesRead);
+                    }
+                    dos.flush();
+                }
+
+            } catch (IOException e) {
+                handler.send("ERROR:文件下载失败: " + e.getMessage());
+            }
         }
     }
 }

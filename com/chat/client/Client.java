@@ -18,6 +18,10 @@ public class Client implements MessageSubject {
         this.out = new PrintWriter(socket.getOutputStream(), true);
     }
 
+    public Socket getSocket() {
+        return socket;
+    }
+
     public void sendMessage(String message) {
         out.println(message);
     }

@@ -39,6 +39,9 @@ public class Server implements UserDatabase.UserDatabaseObserver {
     public static void main(String[] args) throws IOException {
         ServerSocket serverSocket = new ServerSocket(PORT);
         System.out.println("服务器已启动，等待客户端连接...");
+        // 创建文件存储目录
+        new File("files/groups/").mkdirs();
+        new File("files/private/").mkdirs();
         while (true) {
             Socket socket = serverSocket.accept();
             threadPool.execute(new ClientHandler(socket));

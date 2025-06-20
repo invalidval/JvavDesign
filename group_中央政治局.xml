@@ -36,4 +36,13 @@
   <message id="61" receiver="中央政治局" sender="1" timestamp="2025-06-20 00:45:32" type="GROUP">
     <content>行</content>
   </message>
+  <message id="5" receiver="中央政治局" sender="1" timestamp="2025-06-20 12:50:22" type="GROUP">
+    <content>哈哈</content>
+  </message>
+  <message id="6" receiver="中央政治局" sender="3" timestamp="2025-06-20 12:51:38" type="GROUP">
+    <content>666</content>
+  </message>
+  <message id="7" receiver="中央政治局" sender="1" timestamp="2025-06-20 12:52:02" type="GROUP">
+    <content>？</content>
+  </message>
 </messages>
