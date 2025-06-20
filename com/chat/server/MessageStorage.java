@@ -18,7 +18,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * 负责消息的持久化存储和历史查询
  */
 public class MessageStorage {
-    private static final String MESSAGE_FILE = "messages.xml";
+    private static final String PRIVATE_MESSAGE_FILE = "messages_private.xml";
+    private static final String PUBLIC_MESSAGE_FILE = "messages_public.xml";
     private static final String GROUP_FILE_PREFIX = "group_";
     private static final String GROUP_FILE_SUFFIX = ".xml";
     private static final int GROUP_MESSAGE_LIMIT = 100;
@@ -61,9 +62,14 @@ public class MessageStorage {
 
         // 保存到文件
         if (type == MessageType.GROUP && receiver != null) {
+            // 指定群聊消息，保存到群聊专用文件
             saveGroupMessageToFile(receiver, message);
+        } else if (type == MessageType.PRIVATE) {
+            // 私聊消息，保存到私聊文件
+            savePrivateMessageToFile(message);
         } else {
-            saveToFile(message);
+            // 公共聊天消息，保存到公共文件
+            savePublicMessageToFile(message);
         }
 
         System.out.println("消息已保存: " + sender + " -> " + (receiver != null ? receiver : "群聊") + ": " + content);
@@ -187,10 +193,29 @@ public class MessageStorage {
      * 从XML文件加载消息
      */
     private static void loadMessagesFromFile() {
-        File file = new File(MESSAGE_FILE);
+        long maxId = 0;
+        int totalMessages = 0;
+
+        // 加载私聊消息
+        maxId = Math.max(maxId, loadMessagesFromFile(PRIVATE_MESSAGE_FILE, "私聊"));
+        totalMessages += getMessageCountFromFile(PRIVATE_MESSAGE_FILE);
+
+        // 加载公共消息
+        maxId = Math.max(maxId, loadMessagesFromFile(PUBLIC_MESSAGE_FILE, "公共"));
+        totalMessages += getMessageCountFromFile(PUBLIC_MESSAGE_FILE);
+
+        messageIdCounter.set(maxId + 1);
+        System.out.println("已加载 " + totalMessages + " 条历史消息");
+    }
+
+    /**
+     * 从指定XML文件加载消息
+     */
+    private static long loadMessagesFromFile(String fileName, String fileType) {
+        File file = new File(fileName);
         if (!file.exists()) {
-            createEmptyMessageFile();
-            return;
+            createEmptyMessageFile(fileName);
+            return 0;
         }
 
         try {
@@ -222,58 +247,138 @@ public class MessageStorage {
                 maxId = Math.max(maxId, id);
             }
 
-            messageIdCounter.set(maxId + 1);
-            System.out.println("已加载 " + messageNodes.getLength() + " 条历史消息");
+            return maxId;
 
         } catch (Exception e) {
-            System.out.println("加载消息历史失败: " + e.getMessage());
-            createEmptyMessageFile();
+            System.out.println("加载" + fileType + "消息历史失败: " + e.getMessage());
+            createEmptyMessageFile(fileName);
+            return 0;
         }
     }
 
     /**
-     * 保存单条消息到XML文件
+     * 获取文件中的消息数量
      */
-    private static void saveToFile(StoredMessage message) {
+    private static int getMessageCountFromFile(String fileName) {
+        File file = new File(fileName);
+        if (!file.exists()) {
+            return 0;
+        }
+
         try {
-            File file = new File(MESSAGE_FILE);
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             DocumentBuilder builder = factory.newDocumentBuilder();
-            Document doc;
+            Document doc = builder.parse(file);
+            return doc.getElementsByTagName("message").getLength();
+        } catch (Exception e) {
+            return 0;
+        }
+    }
 
-            if (file.exists()) {
-                doc = builder.parse(file);
-            } else {
-                doc = builder.newDocument();
-                Element root = doc.createElement("messages");
-                doc.appendChild(root);
+    /**
+     * 保存私聊消息到私聊文件
+     */
+    private static void savePrivateMessageToFile(StoredMessage message) {
+        saveMessageToFile(message, PRIVATE_MESSAGE_FILE, MessageType.PRIVATE);
+    }
+
+    /**
+     * 保存公共消息到公共文件
+     */
+    private static void savePublicMessageToFile(StoredMessage message) {
+        saveMessageToFile(message, PUBLIC_MESSAGE_FILE, MessageType.GROUP);
+    }
+
+    /**
+     * 保存消息到指定文件
+     * 修复版本：重新构建整个XML文档以避免空行累积
+     */
+    private static void saveMessageToFile(StoredMessage message, String fileName, MessageType filterType) {
+        try {
+            // 获取指定类型的现有消息
+            List<StoredMessage> allMessages = getMessagesFromCacheByType(filterType);
+
+            // 添加新消息
+            allMessages.add(message);
+
+            // 按ID排序确保顺序正确
+            allMessages.sort(Comparator.comparing(StoredMessage::getId));
+
+            // 重新构建整个XML文档
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document doc = builder.newDocument();
+
+            Element root = doc.createElement("messages");
+            doc.appendChild(root);
+
+            // 添加所有消息
+            for (StoredMessage msg : allMessages) {
+                Element messageElem = doc.createElement("message");
+
+                messageElem.setAttribute("id", String.valueOf(msg.getId()));
+                messageElem.setAttribute("sender", msg.getSender());
+                messageElem.setAttribute("receiver", msg.getReceiver() != null ? msg.getReceiver() : "");
+                messageElem.setAttribute("type", msg.getType().toString());
+                messageElem.setAttribute("timestamp", msg.getTimestamp().format(TIMESTAMP_FORMAT));
+
+                Element contentElem = doc.createElement("content");
+                contentElem.setTextContent(msg.getContent());
+                messageElem.appendChild(contentElem);
+
+                root.appendChild(messageElem);
             }
-
-            Element root = doc.getDocumentElement();
-            Element messageElem = doc.createElement("message");
-
-            messageElem.setAttribute("id", String.valueOf(message.getId()));
-            messageElem.setAttribute("sender", message.getSender());
-            messageElem.setAttribute("receiver", message.getReceiver() != null ? message.getReceiver() : "");
-            messageElem.setAttribute("type", message.getType().toString());
-            messageElem.setAttribute("timestamp", message.getTimestamp().format(TIMESTAMP_FORMAT));
-
-            Element contentElem = doc.createElement("content");
-            contentElem.setTextContent(message.getContent());
-            messageElem.appendChild(contentElem);
-
-            root.appendChild(messageElem);
 
             // 写入文件
             TransformerFactory tf = TransformerFactory.newInstance();
             Transformer transformer = tf.newTransformer();
             transformer.setOutputProperty(OutputKeys.INDENT, "yes");
             transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
-            transformer.transform(new DOMSource(doc), new StreamResult(file));
+            transformer.transform(new DOMSource(doc), new StreamResult(new File(fileName)));
 
         } catch (Exception e) {
-            System.out.println("保存消息失败: " + e.getMessage());
+            System.out.println("保存消息到" + fileName + "失败: " + e.getMessage());
         }
+    }
+
+    /**
+     * 从缓存中获取指定类型的消息
+     */
+    private static List<StoredMessage> getMessagesFromCacheByType(MessageType filterType) {
+        List<StoredMessage> filteredMessages = new ArrayList<>();
+
+        // 从所有用户的缓存中收集指定类型的消息，去重
+        Set<Long> addedIds = new HashSet<>();
+        for (List<StoredMessage> userMessages : userMessageCache.values()) {
+            for (StoredMessage msg : userMessages) {
+                if (msg.getType() == filterType && !addedIds.contains(msg.getId())) {
+                    filteredMessages.add(msg);
+                    addedIds.add(msg.getId());
+                }
+            }
+        }
+
+        return filteredMessages;
+    }
+
+    /**
+     * 从缓存中获取所有消息（用于重建XML文件）
+     */
+    private static List<StoredMessage> getAllMessagesFromCache() {
+        List<StoredMessage> allMessages = new ArrayList<>();
+
+        // 从所有用户的缓存中收集消息，去重
+        Set<Long> addedIds = new HashSet<>();
+        for (List<StoredMessage> userMessages : userMessageCache.values()) {
+            for (StoredMessage msg : userMessages) {
+                if (!addedIds.contains(msg.getId())) {
+                    allMessages.add(msg);
+                    addedIds.add(msg.getId());
+                }
+            }
+        }
+
+        return allMessages;
     }
 
     // 保存群聊消息到单独的xml文件，最多保留100条
@@ -360,7 +465,7 @@ public class MessageStorage {
     /**
      * 创建空的消息文件
      */
-    private static void createEmptyMessageFile() {
+    private static void createEmptyMessageFile(String fileName) {
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             DocumentBuilder builder = factory.newDocumentBuilder();
@@ -372,10 +477,10 @@ public class MessageStorage {
             TransformerFactory tf = TransformerFactory.newInstance();
             Transformer transformer = tf.newTransformer();
             transformer.setOutputProperty(OutputKeys.INDENT, "yes");
-            transformer.transform(new DOMSource(doc), new StreamResult(new File(MESSAGE_FILE)));
+            transformer.transform(new DOMSource(doc), new StreamResult(new File(fileName)));
 
         } catch (Exception e) {
-            System.out.println("创建消息文件失败: " + e.getMessage());
+            System.out.println("创建消息文件" + fileName + "失败: " + e.getMessage());
         }
     }
 
@@ -453,8 +558,8 @@ public class MessageStorage {
             String timeStr = timestamp.format(DateTimeFormatter.ofPattern("MM-dd HH:mm"));
             if (type == MessageType.PRIVATE) {
                 return String.format("[%s] [私聊] [%s -> %s]: %s", timeStr, sender, receiver, content);
-            } else if(type == MessageType.GROUP) {
-                return String.format("[%s] [群聊] [%s] %s: %s", timeStr, receiver ,sender, content);
+            } else if (type == MessageType.GROUP) {
+                return String.format("[%s] [群聊] [%s] %s: %s", timeStr, receiver, sender, content);
             }
             return String.format("[%s] [未知类型] %s: %s", timeStr, sender, content);
         }

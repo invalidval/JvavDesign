@@ -1,166 +1,120 @@
 # 项目修改日志 (hhb.md)
 
-# 2025-06-18
+# 2025-06-20
 
 ---
 
-## 功能1：用户漫游功能
+## 功能1：异地登录处理完善
+
+### 问题分析
+
+原有的异地登录功能存在问题：
+
+- UserDatabase.loginUser()方法缺少在线状态检测
+- 没有正确返回LOGIN_ALREADY_ONLINE状态码
+- 异地登录时无法正确处理踢下线逻辑
 
 ### 实现内容
 
-- 同名用户只能在一台设备登录
-- 新设备登录时自动踢掉旧设备
-- 友好的踢下线提示消息
+- 完善异地登录检测逻辑
+- 修复踢下线处理流程
+- 支持多次连续异地登录
+- 提供友好的登录提示信息
 
 ### 文件修改
 
 **1. com/chat/server/UserDatabase.java**
 
-- 第81-101行：修改loginUser()方法，添加漫游功能踢用户逻辑
-- 第108-124行：新增kickExistingUser()和notifyServerToKickUser()方法
-- 第219-222行：新增ServerUserObserver接口，扩展onUserKicked()方法
-
-**2. com/chat/server/Server.java**
-
-- 第11行：添加User类导入
-- 第13行：实现UserDatabase.ServerUserObserver接口
-- 第17行：添加serverInstance静态变量
-- 第34行：初始化消息存储系统
-- 第36行：注册服务器为观察者
-- 第58-61行：修改removeClient()方法，添加用户状态同步
-- 第68-76行：新增kickUser()方法
-- 第112-123行：实现onUserChanged()和onUserKicked()接口方法
-
-**3. com/chat/server/ClientHandler.java**
-
-- 第130-143行：新增forceDisconnect()方法
-
-**4. com/chat/client/Client.java**
-
-- 无修改（保持原有架构兼容性）
-
-### 测试结果
-
-功能正常工作，同名用户互斥登录成功实现
-
----
-
-## 功能2：消息记录功能
-
-### 实现内容
-
-- 自动保存所有群聊和私聊消息
-- 重新登录时自动显示历史消息
-- 支持多种历史消息查询命令
-- 基于XML文件持久化存储
-
-### 文件修改
-
-**1. com/chat/server/MessageStorage.java (新增文件)**
-
-- 完整的消息存储管理类
-- saveMessage()方法：保存消息到XML
-- getUserMessages()和getPrivateMessages()方法：查询历史消息
-- XML文件操作和内存缓存机制
+- 第81-106行：修改loginUser()方法，添加在线状态检测
+- 第121行：将notifyFriendsStatusChange()方法改为public
+- 第169行：将saveUsersToFile()方法改为public
 
 **2. com/chat/server/ClientHandler.java**
 
-- 第12行：添加MessageStorage导入
-- 第35行：注册HistoryMessageHandler("/H"命令)
-- 第77行：登录成功后调用showRecentMessagesOnLogin()
-- 第148-158行：新增showRecentMessagesOnLogin()方法
-- 第213-217行：修改PrivateMessageHandler，添加消息保存
-- 第312-389行：新增HistoryMessageHandler类，支持多种查询格式
-- 第393-399行：修改DefaultMessageHandler，添加群聊消息保存
+- 第89-110行：完善LOGIN_ALREADY_ONLINE状态处理逻辑
+- 添加异地登录成功提示信息
 
-**3. com/chat/server/Server.java**
-
-- 第10行：添加MessageStorage导入
-- 第34行：初始化消息存储系统
-
-### 查询命令
-
-- `/h` - 查看最近20条消息
-- `/h 数量` - 查看指定数量消息
-- `/h 用户名` - 查看与指定用户的私聊记录
-- `/h 用户名 数量` - 查看指定数量的私聊记录
-
-### 测试结果
-
-✅ 功能正常工作，消息自动保存和查询功能完整实现
-
-# 2025-06-19
-
-## 功能3：群聊消息历史记录修复
-
-### 实现内容
-
-- 修复群聊消息(/gs命令)不保存到历史记录的问题
-- 改进群聊消息缓存机制，确保所有群成员都能查看群聊历史
-- 优化群聊消息在历史记录中的显示格式
-
-### 文件修改
-
-**1. com/chat/server/ClientHandler.java**
-
-- 第295行：在GroupSendHandler中添加群聊消息保存逻辑
-- 新增MessageStorage.saveMessage()调用，保存群聊消息到存储系统
-
-**2. com/chat/server/MessageStorage.java**
-
-- 第128-157行：改进addToCache()方法，支持群聊消息缓存
-- 使用反射调用GroupDatabase.getGroupMembers()获取群成员列表
-- 确保群聊消息添加到所有群成员的消息缓存中
-- 第343-353行：优化StoredMessage.toString()方法，群聊消息显示格式为"[时间] [群聊:群名] 发送者: 消息内容"
-
-### 修复效果
-
-- `/gs 群名 消息内容` 发送的群聊消息现在会自动保存
-- 所有群成员都可以通过 `/h` 命令查看群聊历史记录
-- 群聊消息在历史记录中显示清晰的群名标识
-- 保持与私聊消息历史记录的一致性
-
-### 测试结果
-
-✅ 群聊消息历史记录功能修复完成，所有功能正常工作
 
 ---
 
-## debug：用户漫游功能修复
+## 功能2：修复messages.xml空行问题
+
+### 问题分析
+
+messages.xml文件在保存历史聊天记录时会产生大量空行，而群聊XML文件格式正常：
+
+**问题原因**：
+
+- saveToFile()方法每次都在现有XML文档基础上添加新消息
+- XML Transformer的INDENT属性会在现有缩进基础上再次添加缩进
+- 重复的格式化处理导致空行累积效应
+- 每次保存都会保留之前的格式化空行，并添加新的空行
+
+**群聊XML正常的原因**：
+
+- saveGroupMessageToFile()方法每次重新创建整个XML文档
+- 从头构建所有消息元素，一次性格式化输出
+- 避免了重复格式化导致的空行累积
 
 ### 实现内容
 
-- 修复第三个客户端无法踢掉第二个客户端的问题
-- 解决"幽灵连接"问题（只能发消息但收不到消息）
-- 重构连接管理逻辑，简化踢用户流程
+- 重构saveToFile()方法，采用与群聊消息相同的策略
+- 每次重新构建整个XML文档，而不是在现有文档基础上添加
+- 添加getAllMessagesFromCache()辅助方法从缓存获取所有消息
+- 确保消息按ID排序，保持正确的时间顺序
 
 ### 文件修改
 
-**1. com/chat/server/Server.java**
+**1. com/chat/server/MessageStorage.java**
 
-- 第55-61行：重构addClient()方法，在添加新连接前先踢掉同名旧连接
-- 删除第74-84行：移除kickUser()方法（逻辑合并到addClient中）
-- 第13行：修改接口实现，从ServerUserObserver改为UserDatabaseObserver
-- 删除第112-116行：移除onUserKicked()方法
+- 第234-304行：完全重写saveToFile()方法
+- 第286-304行：新增getAllMessagesFromCache()辅助方法
+- 采用重新构建XML文档的策略，避免空行累积
 
-**2. com/chat/server/UserDatabase.java**
+## 功能3：消息存储结构重构
 
-- 第91-92行：简化loginUser()方法，移除复杂的踢用户逻辑
-- 删除第99-119行：移除kickExistingUser()和notifyServerToKickUser()方法
-- 删除第192-194行：移除ServerUserObserver接口定义
+### 实现内容
 
-**3. com/chat/server/ClientHandler.java**
+- 重新组织消息存储结构，让文件名更清晰地反映其内容
+- 将原有的messages.xml拆分为两个专用文件
+- 保持群聊消息继续存储在group_xxx.xml文件中
 
-- 第69-80行：调整登录成功后的处理顺序，确保连接管理正确
+### 存储结构变更
 
-### 修复效果
+**修改前**：
 
-- 第一次登录：用户正常登录
-- 第二次登录：正确踢掉第一个客户端
-- 第三次登录：正确踢掉第二个客户端（修复重点）
-- 消息收发：当前在线设备功能完全正常
-- 无幽灵连接：不再出现只能发送不能接收的连接
+- `messages.xml` - 混合存储私聊消息和公共聊天消息
+- `group_xxx.xml` - 存储指定群聊消息
 
-### 测试结果
+**修改后**：
 
-✅ 用户漫游功能修复完成，多设备登录互斥功能正常工作
+- `messages_private.xml` - 仅存储私聊消息 (type=PRIVATE)
+- `messages_public.xml` - 仅存储公共聊天消息 (type=GROUP, receiver=null)
+- `group_xxx.xml` - 存储指定群聊消息 (type=GROUP, receiver=群名)
+
+### 文件修改
+
+**1. com/chat/server/MessageStorage.java**
+
+- 第21-22行：修改文件常量定义
+  - `MESSAGE_FILE` → `PRIVATE_MESSAGE_FILE` 和 `PUBLIC_MESSAGE_FILE`
+- 第63-73行：重构saveMessage()存储逻辑
+  - 私聊消息 → savePrivateMessageToFile()
+  - 公共消息 → savePublicMessageToFile()
+  - 群聊消息 → saveGroupMessageToFile()
+- 第192-276行：重构loadMessagesFromFile()方法
+  - 分别加载私聊和公共消息文件
+  - 统计总消息数量
+- 第278-342行：新增专用保存方法
+  - savePrivateMessageToFile() 和 savePublicMessageToFile()
+  - saveMessageToFile() 通用保存方法
+- 第344-361行：新增getMessagesFromCacheByType()方法
+- 第465-485行：修改createEmptyMessageFile()支持指定文件名
+
+### 消息分类逻辑
+
+| 消息类型 | 触发方式           | 存储位置                 |
+| -------- | ------------------ | ------------------------ |
+| 私聊消息 | `/p 用户名 消息` | `messages_private.xml` |
+| 公共聊天 | 直接输入消息       | `messages_public.xml`  |
+| 指定群聊 | `/gs 群名 消息`  | `group_群名.xml`       |
