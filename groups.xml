@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<groups>
+    <group name="testgroup">
+        <member>1</member>
+        <member>3</member>
+        <member>64</member>
+    </group>
+    <group name="中央政治局">
+        <member>1</member>
+        <member>3</member>
+    </group>
+</groups>

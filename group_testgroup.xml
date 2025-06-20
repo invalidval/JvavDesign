@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<messages>
+  <message id="2" receiver="testgroup" sender="1" timestamp="2025-06-20 14:43:00" type="GROUP">
+    <content>你好</content>
+  </message>
+  <message id="3" receiver="testgroup" sender="3" timestamp="2025-06-20 14:43:13" type="GROUP">
+    <content>11</content>
+  </message>
+  <message id="6" receiver="testgroup" sender="1" timestamp="2025-06-20 14:50:03" type="GROUP">
+    <content>11</content>
+  </message>
+  <message id="8" receiver="testgroup" sender="3" timestamp="2025-06-20 14:50:41" type="GROUP">
+    <content>33</content>
+  </message>
+  <message id="9" receiver="testgroup" sender="1" timestamp="2025-06-20 14:53:55" type="GROUP">
+    <content>11</content>
+  </message>
+  <message id="10" receiver="testgroup" sender="3" timestamp="2025-06-20 14:53:59" type="GROUP">
+    <content>33</content>
+  </message>
+</messages>
