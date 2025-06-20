@@ -2,14 +2,14 @@ package com.chat.client;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.ArrayList;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.List;
 
 public class Client implements MessageSubject {
     private Socket socket;
     private BufferedReader in;
     private PrintWriter out;
-    private List<MessageObserver> observers = new ArrayList<>();
+    private List<MessageObserver> observers = new CopyOnWriteArrayList<>();
     private volatile boolean listening = false;
 
     public Client(String host, int port) throws IOException {

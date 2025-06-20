@@ -112,37 +112,51 @@ public class ClientHandler implements Runnable {
             out.println(username + " 已断开连接");
         } finally {
             if (username != null) {
-                Server.removeClient(username);
+                ClientHandler current = Server.getClient(username);
+                if (current == this) {
+                    Server.removeClient(username);
+                } else {
+                    System.out.println("【finally】当前不是最新连接，跳过 removeClient");
+                }
             }
             try {
                 socket.close();
             } catch (IOException e) {
-                e.printStackTrace();
+                System.out.println("【finally】关闭Socket错误: " + e.getMessage());
             }
         }
     }
 
+    /**
+     * 发送消息给客户端，线程安全
+     */
     public void send(String message) {
-        synchronized (out) { // 确保输出流的线程安全
+        synchronized (out) {
             out.println(message);
         }
     }
 
     /**
-     * 强制断开客户端连接
+     * 强制断开客户端连接（不移除，交由 run() 的 finally 处理）
      */
     public void forceDisconnect() {
+        System.out.println("【forceDisconnect】开始执行，username=" + username);
         try {
             if (username != null) {
                 User user = UserDatabase.getUser(username);
                 if (user != null) {
                     user.setOnline(false);
                 }
-                Server.removeClient(username);
             }
-            socket.close();
-        } catch (IOException e) {
-            System.out.println("强制断开连接时发生错误: " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("【forceDisconnect】错误: " + e.getMessage());
+        } finally {
+            try {
+                socket.close();
+                System.out.println("【forceDisconnect】socket.close() 执行完成");
+            } catch (IOException e) {
+                System.out.println("【forceDisconnect】关闭Socket错误: " + e.getMessage());
+            }
         }
     }
 
