@@ -36,6 +36,7 @@ public class FileTransferManager {
 //             3. 可选：读取服务器返回的上传结果
              String resp = dis.readUTF();
              System.out.println("上传响应: " + resp);
+
         }
     }
 

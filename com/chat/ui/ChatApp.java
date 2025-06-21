@@ -12,6 +12,8 @@ import java.io.IOException;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import javax.xml.parsers.DocumentBuilderFactory;
+import org.w3c.dom.*;
 
 public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
     private JFrame frame ;
@@ -57,7 +59,21 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
     }
 
     public ChatApp() {
-        frame = new JFrame("线上聊天室 Designed by 2023211310班 我们6个");
+        String title = "线上聊天室";
+        try {
+            File xmlFile = new File("config/foo.xml");
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            Document doc = dbf.newDocumentBuilder().parse(xmlFile);
+            NodeList list = doc.getElementsByTagName("sentence");
+            if (list.getLength() > 0) {
+                int idx = new Random().nextInt(list.getLength());
+                String randomSentence = list.item(idx).getTextContent();
+                title = title + " - " + randomSentence;
+            }
+        } catch (Exception e) {
+            // 读取失败则用默认标题
+        }
+        frame = new JFrame(title);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(700, 500);
         frame.setLayout(new CardLayout());

@@ -4,7 +4,8 @@ import com.chat.client.Client;
 import com.chat.client.MessageObserver;
 import com.chat.file.FileTransferListener;
 import com.chat.file.FileTransferManager;
-import com.chat.ui.ChatApp;
+import com.chat.file.FileRecord;
+import com.chat.file.FileHistoryXmlManager;
 
 import javax.swing.*;
 import java.awt.*;
@@ -254,6 +255,10 @@ public class ChatUIFriends implements MessageObserver {
             String sender = parts[4];
             String targetId = parts[5];
 
+            // 保存文件记录到历史
+            FileRecord record = new FileRecord(fileId, fileName, fileSize, sender, targetId, false, System.currentTimeMillis());
+            FileHistoryXmlManager.addRecord(currentUser,false,sender, record);
+
             // 打开或创建私聊窗口
             PrivateChatWindow win = privateChats.computeIfAbsent(sender, fn -> {
                 PrivateChatWindow w = new PrivateChatWindow(fn);
@@ -271,12 +276,20 @@ public class ChatUIFriends implements MessageObserver {
         private JTextArea chatArea;
         private JTextField inputField;
         private String friendName;
+        private JTabbedPane tabbedPane;
+        private JPanel chatPanel;
+        // 文件Tab集成FileListPanel
+        private FileListPanel fileListPanel;
 
         public PrivateChatWindow(String friendName) {
             super("与 " + friendName + " 私聊");
             this.friendName = friendName;
             setSize(400, 300);
             setLayout(new BorderLayout());
+
+            tabbedPane = new JTabbedPane();
+            chatPanel = new JPanel(new BorderLayout());
+            fileListPanel = new FileListPanel(client, currentUser, false, friendName, this);
 
             // 扩展菜单
             JPopupMenu menu = new JPopupMenu();
@@ -327,9 +340,13 @@ public class ChatUIFriends implements MessageObserver {
             sendButton.addActionListener(e -> sendMessage());
             inputField.addActionListener(e -> sendMessage());
 
-            add(topPanel, BorderLayout.NORTH);
-            add(scrollPane, BorderLayout.CENTER);
-            add(inputPanel, BorderLayout.SOUTH);
+            chatPanel.add(topPanel, BorderLayout.NORTH);
+            chatPanel.add(scrollPane, BorderLayout.CENTER);
+            chatPanel.add(inputPanel, BorderLayout.SOUTH);
+
+            tabbedPane.addTab("聊天", chatPanel);
+            tabbedPane.addTab("文件", fileListPanel);
+            add(tabbedPane, BorderLayout.CENTER);
 
             //新增文件上传功能
             JButton fileButton = new JButton("发送文件");
@@ -391,10 +408,14 @@ public class ChatUIFriends implements MessageObserver {
                     JOptionPane.YES_NO_OPTION);
 
             if (option == JOptionPane.YES_OPTION) {
-                System.out.println("对话框选择: YES");  // 验证选项
-                System.out.println("开始下载文件: " + fileName);
-                JFileChooser fileChooser = new JFileChooser();
-                fileChooser.setSelectedFile(new File(fileName));
+                // 获取当前系统用户名
+                String sysUser = System.getProperty("user.name");
+                // 构造C盘文档路径
+                String docPath = System.getProperty("user.home") + File.separator + "Documents" + File.separator + "ChatFiles" + File.separator + currentUser;
+                File userDir = new File(docPath);
+                if (!userDir.exists()) userDir.mkdirs();
+                JFileChooser fileChooser = new JFileChooser(userDir);
+                fileChooser.setSelectedFile(new File(userDir, fileName));
                 if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
                     String savePath = fileChooser.getSelectedFile().getPath();
                     FileTransferManager.downloadFile(client.getSocket(), fileId, savePath,
@@ -406,7 +427,7 @@ public class ChatUIFriends implements MessageObserver {
                                 @Override
                                 public void onComplete(String filePath) {
                                     appendMessage(sender + " 发送的文件已下载完成: " + fileName);
-                                    JOptionPane.showMessageDialog(PrivateChatWindow.this, "文件下载完成!");
+                                    JOptionPane.showMessageDialog(PrivateChatWindow.this, "文件下载完成!\n保存路径: " + filePath);
                                 }
 
                                 @Override
@@ -422,4 +443,3 @@ public class ChatUIFriends implements MessageObserver {
         }
     }
 }
-

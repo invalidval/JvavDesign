@@ -4,6 +4,8 @@ import com.chat.client.Client;
 import com.chat.client.MessageObserver;
 import com.chat.file.FileTransferListener;
 import com.chat.file.FileTransferManager;
+import com.chat.file.FileRecord;
+import com.chat.file.FileHistoryXmlManager;
 
 import javax.swing.*;
 import java.awt.*;
@@ -195,6 +197,10 @@ public class ChatUIGroup implements MessageObserver {
             String sender = parts[4];
             String targetId = parts[5]; // 群名
 
+            // 保存文件记录到历史
+            FileRecord record = new FileRecord(fileId, fileName, fileSize, sender, targetId, true, System.currentTimeMillis());
+            FileHistoryXmlManager.addRecord(currentUser,true ,sender, record);
+
             // 打开或创建群聊窗口
             GroupChatWindow win = groupChats.computeIfAbsent(targetId, gn -> {
                 GroupChatWindow w = new GroupChatWindow(gn);
@@ -216,12 +222,20 @@ public class ChatUIGroup implements MessageObserver {
         private JTextArea chatArea;
         private JTextField inputField;
         private String groupName;
+        private JTabbedPane tabbedPane;
+        private JPanel chatPanel;
+        private FileListPanel fileListPanel; // 替换原有的文件表格
 
         public GroupChatWindow(String groupName) {
             super("群聊 - " + groupName);
             this.groupName = groupName;
             setSize(400, 300);
             setLayout(new BorderLayout());
+
+            tabbedPane = new JTabbedPane();
+            chatPanel = new JPanel(new BorderLayout());
+            // 文件Tab集成FileListPanel
+            fileListPanel = new FileListPanel(client, currentUser, true, groupName, this);
 
             chatArea = new JTextArea();
             chatArea.setEditable(false);
@@ -237,8 +251,12 @@ public class ChatUIGroup implements MessageObserver {
             sendButton.addActionListener(e -> sendMessage());
             inputField.addActionListener(e -> sendMessage());
 
-            add(scrollPane, BorderLayout.CENTER);
-            add(inputPanel, BorderLayout.SOUTH);
+            chatPanel.add(scrollPane, BorderLayout.CENTER);
+            chatPanel.add(inputPanel, BorderLayout.SOUTH);
+
+            tabbedPane.addTab("聊天", chatPanel);
+            tabbedPane.addTab("文件", fileListPanel);
+            add(tabbedPane, BorderLayout.CENTER);
 
             // 可扩展：显示群成员列表
             //新增文件上传功能
@@ -281,6 +299,14 @@ public class ChatUIGroup implements MessageObserver {
 
             add(bottomPanel, BorderLayout.SOUTH);
 
+            // 窗口关闭时清理资源
+            addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosing(WindowEvent e) {
+                    groupChats.remove(groupName);
+                    super.windowClosing(e);
+                }
+            });
         }
 
         private void sendMessage() {
