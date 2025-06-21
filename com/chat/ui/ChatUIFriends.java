@@ -2,6 +2,7 @@ package com.chat.ui;
 
 import com.chat.client.Client;
 import com.chat.client.MessageObserver;
+import com.chat.file.FileTransferListener;
 import com.chat.file.FileTransferManager;
 import com.chat.ui.ChatApp;
 
@@ -245,6 +246,23 @@ public class ChatUIFriends implements MessageObserver {
                 win.appendMessage(sender + ": " + msg);
                 win.setVisible(true);
             }
+        }else if (message.startsWith("FILE_NOTIFY:")) {
+            String[] parts = message.split(":");
+            String fileId = parts[1];
+            String fileName = parts[2];
+            long fileSize = Long.parseLong(parts[3]);
+            String sender = parts[4];
+            String targetId = parts[5];
+
+            // 打开或创建私聊窗口
+            PrivateChatWindow win = privateChats.computeIfAbsent(sender, fn -> {
+                PrivateChatWindow w = new PrivateChatWindow(fn);
+                w.setVisible(true);
+                return w;
+            });
+
+            // 在私聊窗口中显示文件接收提示
+            win.showFileReceiveDialog(fileId, fileName, fileSize, sender);
         }
     }
 
@@ -308,7 +326,7 @@ public class ChatUIFriends implements MessageObserver {
                 if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                     File selectedFile = fileChooser.getSelectedFile();
                     try {
-                        FileTransferManager.uploadFile(client.getSocket(), selectedFile, friendName, false);
+                        FileTransferManager.uploadFile(client.getSocket(), selectedFile, friendName, false, currentUser);
                         appendMessage("我: 发送文件 " + selectedFile.getName());
                         JOptionPane.showMessageDialog(this, "文件发送成功!");
                     } catch (IOException ex) {
@@ -352,5 +370,44 @@ public class ChatUIFriends implements MessageObserver {
         public void appendMessage(String msg) {
             chatArea.append(msg + "\n");
         }
+
+        public void showFileReceiveDialog(String fileId, String fileName, long fileSize, String sender) {
+            appendMessage(sender + " 发送了文件: " + fileName);
+            int option = JOptionPane.showConfirmDialog(this,
+                    sender + " 发送了文件: " + fileName + "\n是否下载?",
+                    "收到文件",
+                    JOptionPane.YES_NO_OPTION);
+
+            if (option == JOptionPane.YES_OPTION) {
+                System.out.println("对话框选择: YES");  // 验证选项
+                System.out.println("开始下载文件: " + fileName);
+                JFileChooser fileChooser = new JFileChooser();
+                fileChooser.setSelectedFile(new File(fileName));
+                if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                    String savePath = fileChooser.getSelectedFile().getPath();
+                    FileTransferManager.downloadFile(client.getSocket(), fileId, savePath,
+                            new FileTransferListener() {
+                                @Override
+                                public void onProgress(int percentage) {
+                                }
+
+                                @Override
+                                public void onComplete(String filePath) {
+                                    appendMessage(sender + " 发送的文件已下载完成: " + fileName);
+                                    JOptionPane.showMessageDialog(PrivateChatWindow.this, "文件下载完成!");
+                                }
+
+                                @Override
+                                public void onError(String error) {
+                                    JOptionPane.showMessageDialog(PrivateChatWindow.this,
+                                            "下载失败: " + error,
+                                            "错误",
+                                            JOptionPane.ERROR_MESSAGE);
+                                }
+                            });
+                }
+            }
+        }
     }
 }
+

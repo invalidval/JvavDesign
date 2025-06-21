@@ -195,44 +195,12 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
         }else if (message.startsWith("FILE_NOTIFY:")) {// 文件传输通知
             // FILE_NOTIFY:fileId:fileName:fileSize:sender:targetId:type
             String[] parts = message.split(":");
-            String fileId = parts[1];
-            String fileName = parts[2];
-            long fileSize = Long.parseLong(parts[3]);
-            String sender = parts[4];
-            String targetId = parts[5];
             boolean isGroup = parts[6].equals("group");
-
-            // 弹出接收提示
-            int option = JOptionPane.showConfirmDialog(frame,
-                    sender + " 发送了文件: " + fileName + "\n是否下载?",
-                    "收到文件",
-                    JOptionPane.YES_NO_OPTION);
-
-            if (option == JOptionPane.YES_OPTION) {
-                JFileChooser fileChooser = new JFileChooser();
-                fileChooser.setSelectedFile(new File(fileName));
-                if (fileChooser.showSaveDialog(frame) == JFileChooser.APPROVE_OPTION) {
-                    String savePath = fileChooser.getSelectedFile().getPath();
-                    // 简化的下载监听器
-                    FileTransferManager.downloadFile(client.getSocket(), fileId, savePath,
-                            new FileTransferListener() {
-                                @Override
-                                public void onProgress(int percentage) {}
-
-                                @Override
-                                public void onComplete(String filePath) {
-                                    JOptionPane.showMessageDialog(frame, "文件下载完成!");
-                                }
-
-                                @Override
-                                public void onError(String error) {
-                                    JOptionPane.showMessageDialog(frame,
-                                            "下载失败: " + error,
-                                            "错误",
-                                            JOptionPane.ERROR_MESSAGE);
-                                }
-                            });
-                }
+            // 根据是群聊还是私聊分发到对应UI
+            if (isGroup) {
+                if (groupUI != null) groupUI.onMessageReceived(message);
+            } else {
+                if (friendsUI != null) friendsUI.onMessageReceived(message);
             }
         }
     }
