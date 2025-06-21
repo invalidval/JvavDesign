@@ -660,9 +660,10 @@ public class ClientHandler extends Thread implements UserObserver {
 
                     // 发送文件数据
                     dos.writeUTF("FILE_DATA");
+                    dos.writeUTF("FILE_DATA");
                     dos.writeUTF(fileInfo.getName());
                     dos.writeLong(file.length());
-                    dos.flush();
+
 
                     try (FileInputStream fis = new FileInputStream(file)) {
                         byte[] buffer = new byte[4096];
@@ -671,6 +672,7 @@ public class ClientHandler extends Thread implements UserObserver {
                             dos.write(buffer, 0, bytesRead);
                         }
                         dos.flush();
+                        System.out.println("服务端上传完成: " + fileInfo.getName());
                     }
 
                     // === 关键：此处不要再用 handler.send()/out.println() 发送任何内容 ===

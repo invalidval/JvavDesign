@@ -48,4 +48,7 @@
   <message id="6" receiver="中央政治局" sender="3" timestamp="2025-06-20 17:49:22" type="GROUP">
     <content>你家</content>
   </message>
+  <message id="2259" receiver="中央政治局" sender="3" timestamp="2025-06-21 13:05:48" type="GROUP">
+    <content>HHH</content>
+  </message>
 </messages>
