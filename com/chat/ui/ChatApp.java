@@ -2,12 +2,11 @@ package com.chat.ui;
 
 import com.chat.client.Client;
 import com.chat.client.MessageObserver;
-import com.chat.file.FileTransferListener;
-import com.chat.file.FileTransferManager;
 
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.*;
 import java.util.List;
@@ -20,6 +19,8 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
     private JPanel loginPanel;
     private Client client;
     private String currentUser;
+    private String serverIp = "127.0.0.1"; // 默认服务器IP
+    private int serverPort = 8888;
 
     // 主界面相关
     private JPanel mainPanel;
@@ -52,13 +53,14 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             if (bgImage != null) {
-                // 自动缩放填充整个面板
+                // 自动缩放填充整个面���
                 g.drawImage(bgImage, 0, 0, getWidth(), getHeight(), this);
             }
         }
     }
 
     public ChatApp() {
+        loadServerConfig();
         String title = "线上聊天室";
         try {
             File xmlFile = new File("config/foo.xml");
@@ -85,8 +87,19 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
         frame.setVisible(true);
     }
 
+    private void loadServerConfig() {
+        try {
+            Properties props = new Properties();
+            props.load(new FileInputStream("config/client.properties"));
+            serverIp = props.getProperty("serverIp", serverIp);
+            String portStr = props.getProperty("serverPort");
+            if (portStr != null) serverPort = Integer.parseInt(portStr);
+        } catch (Exception e) {
+            // 配置文件不存在或读取失败，使用默认值
+        }
+    }
+
     private void createLoginPanel() {
-        // loginPanel = new JPanel(new GridBagLayout());
         loginPanel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(10, 10, 10, 10);
@@ -127,8 +140,15 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
             String username = usernameField.getText().trim();
             String password = new String(passwordField.getPassword()).trim();
             if (!username.isEmpty() && !password.isEmpty()) {
-                client.sendMessage("/l " + username + " " + password);
-                currentUser = username;
+                try {
+                    client = new Client(serverIp, serverPort);
+                    client.addObserver(this);
+                    client.startListening();
+                    client.sendMessage("/l " + username + " " + password);
+                    currentUser = username;
+                } catch (IOException ex) {
+                    JOptionPane.showMessageDialog(frame, "无法连接到服务器：" + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                }
             } else {
                 JOptionPane.showMessageDialog(frame, "用户名和密码不能为空！", "错误", JOptionPane.ERROR_MESSAGE);
             }
@@ -138,7 +158,14 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
             String username = usernameField.getText().trim();
             String password = new String(passwordField.getPassword()).trim();
             if (!username.isEmpty() && !password.isEmpty()) {
-                client.sendMessage("/r " + username + " " + password);
+                try {
+                    client = new Client(serverIp, serverPort);
+                    client.addObserver(this);
+                    client.startListening();
+                    client.sendMessage("/r " + username + " " + password);
+                } catch (IOException ex) {
+                    JOptionPane.showMessageDialog(frame, "无法连接到服务器：" + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                }
             } else {
                 JOptionPane.showMessageDialog(frame, "用户名和密码不能为空！", "错误", JOptionPane.ERROR_MESSAGE);
             }
@@ -311,7 +338,7 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
 
     public void start() {
         try {
-            client = new Client("localhost", 8888);
+            client = new Client(serverIp, serverPort);
             client.addObserver(this); // 确保只注册一次
             client.startListening();
         } catch (IOException e) {
@@ -406,7 +433,7 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
                     client.sendMessage("/logout");
                 }
                 client.stopListening();
-                client = new Client("localhost", 8888);
+                client = new Client(serverIp, serverPort);
                 client.addObserver(this);
                 client.startListening();
             }
