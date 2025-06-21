@@ -248,7 +248,7 @@ public class ChatUIGroup implements MessageObserver {
                 if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                     File selectedFile = fileChooser.getSelectedFile();
                     try {
-                        FileTransferManager.uploadFile(client.getSocket(), selectedFile, groupName, true);
+                        FileTransferManager.uploadFile(client.getSocket(), selectedFile, groupName, true, currentUser);
                         appendMessage("我: 发送文件 " + selectedFile.getName());
                         JOptionPane.showMessageDialog(this, "文件发送成功!");
                     } catch (IOException ex) {
@@ -320,3 +320,4 @@ public class ChatUIGroup implements MessageObserver {
         }
     }
 }
+

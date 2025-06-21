@@ -50,6 +50,17 @@ public class ClientHandler extends Thread implements UserObserver {
                 if (initialMessage == null)
                     break;
 
+                // === 支持独立socket直接处理/FILE和/DOWNLOAD ===
+                String cmd = initialMessage.trim().split("\\s+")[0].toUpperCase();
+                if ("/FILE".equals(cmd) || "/DOWNLOAD".equals(cmd)) {
+                    MessageHandlerStrategy strategy = handlerStrategies.get(cmd);
+                    if (strategy != null) {
+                        strategy.handle(initialMessage, this);
+                    }
+                    // 处理完直接关闭连接
+                    return;
+                }
+
                 if (initialMessage.startsWith("/r")) {
                     String[] parts = initialMessage.trim().split("\\s+");
                     if (parts.length < 3) {
@@ -103,6 +114,7 @@ public class ClientHandler extends Thread implements UserObserver {
             }
 
             String message;
+
             while ((username != null) && (message = in.readUTF()) != null) { // readUTF
                 String command = message.startsWith("/") ? message.split("\\s+")[0].toUpperCase() : "DEFAULT";
                 MessageHandlerStrategy strategy = handlerStrategies.getOrDefault(command,
@@ -545,10 +557,11 @@ public class ClientHandler extends Thread implements UserObserver {
                 long fileSize = Long.parseLong(parts[2]);
                 String targetUser = parts[3];
                 boolean isGroup = Boolean.parseBoolean(parts[4]);
+                String sender = parts.length > 5 ? parts[5] : handler.username; // 新增：支持独立socket传递sender
 
                 // 创建目标目录
                 String basePath = isGroup ? "files/groups/" : "files/private/";
-                String dirPath = basePath + (isGroup ? targetUser : username + "_" + targetUser);
+                String dirPath = basePath + (isGroup ? targetUser : sender + "_" + targetUser);
                 File dir = new File(dirPath);
                 if (!dir.exists()) {
                     boolean created = dir.mkdirs(); // 检查目录创建是否成功
@@ -566,7 +579,6 @@ public class ClientHandler extends Thread implements UserObserver {
                 System.out.println("正在保存文件到: " + filePath); // 添加日志
 
                 // 接收文件数据
-                // 关键：使用handler持有的统一输入流，而不是从socket获取新流
                 DataInputStream dataIn = handler.in;
                 FileOutputStream fos = new FileOutputStream(file);
                 byte[] buffer = new byte[8192];
@@ -586,7 +598,7 @@ public class ClientHandler extends Thread implements UserObserver {
                         fileId,          // String fileId
                         fileName,        // String fileName
                         fileSize,        // long fileSize
-                        username,        // String sender
+                        sender,          // String sender
                         targetUser,      // String receiver
                         isGroup,         // boolean isGroup
                         filePath        // String filePath
@@ -596,14 +608,14 @@ public class ClientHandler extends Thread implements UserObserver {
 
                 // 发送文件通知
                 String notifyMsg = String.format("FILE_NOTIFY:%s:%s:%d:%s:%s:%s",
-                        fileId, fileName, fileSize, username, targetUser, isGroup ? "group" : "private");
+                        fileId, fileName, fileSize, sender, targetUser, isGroup ? "group" : "private");
 
                 if (isGroup) {
                     // 群文件，通知所有群成员
                     Set<String> members = GroupDatabase.getGroupMembers(targetUser);
                     if (members != null) {
                         for (String member : members) {
-                            if (!member.equals(username)) {
+                            if (!member.equals(sender)) {
                                 ClientHandler memberHandler = Server.getClientHandler(member);
                                 if (memberHandler != null) {
                                     memberHandler.send(notifyMsg);
@@ -659,7 +671,6 @@ public class ClientHandler extends Thread implements UserObserver {
                     }
 
                     // 发送文件数据
-                    dos.writeUTF("FILE_DATA");
                     dos.writeUTF("FILE_DATA");
                     dos.writeUTF(fileInfo.getName());
                     dos.writeLong(file.length());

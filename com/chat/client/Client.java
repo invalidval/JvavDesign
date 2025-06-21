@@ -12,8 +12,6 @@ public class Client implements MessageSubject {
     private List<MessageObserver> observers = new CopyOnWriteArrayList<>();
     private volatile boolean listening = false;
 
-    // 新增：用于暂停/恢复监听
-    private volatile boolean paused = false;
     private Thread listenThread;
     private static final List<Client> allClients = new CopyOnWriteArrayList<>();
 
@@ -80,18 +78,9 @@ public class Client implements MessageSubject {
         listening = true;
         listenThread = new Thread(() -> {
             try {
-                String serverMessage;
-                while (listening && (serverMessage = receiveMessage()) != null) {
-                    // === 新增：支持暂停 ===
-                    synchronized (this) {
-                        while (paused) {
-                            try {
-                                this.wait();
-                            } catch (InterruptedException e) {
-                                // ignore
-                            }
-                        }
-                    }
+                while (listening) {
+                    String serverMessage = receiveMessage();
+                    if (serverMessage == null) break;
                     final String msg = serverMessage;
                     for (MessageObserver observer : observers) {
                         javax.swing.SwingUtilities.invokeLater(() -> {
@@ -113,19 +102,6 @@ public class Client implements MessageSubject {
             if (c.socket == socket) return c;
         }
         return null;
-    }
-
-    // 新增：暂停监听
-    public void pauseListening() {
-        paused = true;
-    }
-
-    // 新增：恢复监听
-    public void resumeListening() {
-        paused = false;
-        synchronized (this) {
-            this.notifyAll();
-        }
     }
 
     public void stopListening() {
