@@ -1,20 +1,21 @@
 # JvavDesign
 The course-design of java
 ## 提交说明
-- 目前最新分支位于v3！接下来都提交到这里。
-- 建议养成及时pull和push的好习惯。
-- 对于分工中所示的每一个子版本，请在分支上开发，待该版本完成后再合并到main。
-- 提交遇到冲突时，请务必谨慎处理。不确定如何保留代码时，请及时与其他相关开发者沟通。
+- 目前最新分支位于v3，后续不再新增分支。
+- 建议养成及时pull和push的好习惯。提交前先pull，无法解决的冲突请第一时间在群中告知大家！
 ## 进展描述
 - 基本功能已实现。基本UI已完成，可通过com/chat/ui/ChatAPP启动。
+- 用户可能要求的功能已实现。对应的UI已完成。
+- 优化了输入输出流为DataInputStream和DataOutputStream（代替了BufferReader）、独立文件传输socket、好友和群聊页面的聊天记录查询子页面。
 ## 运行说明
 - 服务端：com/chat/server.java
 - 客户端：
   - 控制台版：SimpleClient.java
   - UI版：com/chat/ui/ChatAPP.java
 ## BUG描述
+- 暂无，（不）欢迎补充
 ## 后续工作注意事项
 - UI是第二位的，功能是第一位的。功能可以参考ClientHandler.java中的“指令”思路。
 - 完成功能后，也请完成相应的UI。
 - 单个源文件不要太长。
-- 强烈建议使用多线程。现在服务器分发群聊消息是单线程，我感觉可以放入一个独立线程，欢迎有能力者修改。
+- 务必使用多线程、独立socket！保证Client的消息监听线程在任何情况下都无需暂停。
