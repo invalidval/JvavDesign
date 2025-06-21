@@ -7,13 +7,18 @@ The course-design of java
 - 基本功能已实现。基本UI已完成，可通过com/chat/ui/ChatAPP启动。
 - 用户可能要求的功能已实现。对应的UI已完成。
 - 优化了输入输出流为DataInputStream和DataOutputStream（代替了BufferReader）、独立文件传输socket、好友和群聊页面的聊天记录查询子页面。
+- 文件下载路径及传输记录默认路径在c盘文档 Chatfiles下。
 ## 运行说明
 - 服务端：com/chat/server.java
 - 客户端：
   - 控制台版：SimpleClient.java
   - UI版：com/chat/ui/ChatAPP.java
 ## BUG描述
-- 暂无，（不）欢迎补充
+- 文件传输历史功能：
+  - 服务器重启后，所有历史记录表现为不可下载，会提示文件不存在。但是文件仍在服务器。
+  - 文件列表中的“删除”按钮无法真正删除记录。
+  - 文件记录未保存在发送方一侧。
+  - 接收方离线时的文件消息直接丢弃。
 ## 后续工作注意事项
 - UI是第二位的，功能是第一位的。功能可以参考ClientHandler.java中的“指令”思路。
 - 完成功能后，也请完成相应的UI。
