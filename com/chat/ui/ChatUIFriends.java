@@ -282,6 +282,9 @@ public class ChatUIFriends implements MessageObserver {
             JPopupMenu menu = new JPopupMenu();
             JMenuItem deleteFriendItem = new JMenuItem("删除好友");
             menu.add(deleteFriendItem);
+            // 新增：历史消息按钮
+            JMenuItem historyItem = new JMenuItem("查看历史消息");
+            menu.add(historyItem);
 
             JButton menuButton = new JButton("⋮");
             menuButton.setFocusable(false);
@@ -295,6 +298,15 @@ public class ChatUIFriends implements MessageObserver {
                     privateChats.remove(friendName);
                     client.sendMessage("/f"); // 刷新好友列表
                 }
+            });
+            // 新增：历史消息弹窗逻辑
+            historyItem.addActionListener(e -> {
+                ChatUIHistory historyPanel = new ChatUIHistory(client, this, currentUser, "private", friendName);
+                JDialog dialog = new JDialog(this, "历史消息 - " + friendName, true);
+                dialog.setContentPane(historyPanel.getPanel());
+                dialog.setSize(600, 400);
+                dialog.setLocationRelativeTo(this);
+                dialog.setVisible(true);
             });
 
             JPanel topPanel = new JPanel(new BorderLayout());

@@ -260,8 +260,20 @@ public class ChatUIGroup implements MessageObserver {
                 }
             });
 
+            // 新增：历史消息按钮
+            JButton historyButton = new JButton("查看历史消息");
+            historyButton.addActionListener(e -> {
+                ChatUIHistory historyPanel = new ChatUIHistory(client, this, currentUser, "group", groupName);
+                JDialog dialog = new JDialog(this, "群聊历史消息 - " + groupName, true);
+                dialog.setContentPane(historyPanel.getPanel());
+                dialog.setSize(600, 400);
+                dialog.setLocationRelativeTo(this);
+                dialog.setVisible(true);
+            });
+
             JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
             buttonPanel.add(fileButton);
+            buttonPanel.add(historyButton);
             // 修改inputPanel的添加方式
             JPanel bottomPanel = new JPanel(new BorderLayout());
             bottomPanel.add(buttonPanel, BorderLayout.NORTH);

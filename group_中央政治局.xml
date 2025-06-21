@@ -54,4 +54,7 @@
   <message id="2270" receiver="中央政治局" sender="1" timestamp="2025-06-21 13:45:30" type="GROUP">
     <content>der</content>
   </message>
+  <message id="2283" receiver="中央政治局" sender="3" timestamp="2025-06-21 14:50:03" type="GROUP">
+    <content>的</content>
+  </message>
 </messages>
