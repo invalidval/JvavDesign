@@ -10,8 +10,8 @@ public class SimpleClient {
     public static void main(String[] args) {
         try {
             Socket socket = new Socket("localhost", 8888);
-            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+            DataInputStream in = new DataInputStream(socket.getInputStream());
             Scanner scanner = new Scanner(System.in);
             
             System.out.println("连接到服务器成功！");
@@ -28,9 +28,11 @@ public class SimpleClient {
             Thread receiveThread = new Thread(() -> {
                 try {
                     String serverMessage;
-                    while ((serverMessage = in.readLine()) != null) {
+                    while ((serverMessage = in.readUTF()) != null) {
                         System.out.println("服务器: " + serverMessage);
                     }
+                } catch (EOFException e) {
+                    System.out.println("服务器关闭了连接。");
                 } catch (IOException e) {
                     System.out.println("与服务器的连接已断开");
                 }
@@ -44,7 +46,7 @@ public class SimpleClient {
                 if ("quit".equalsIgnoreCase(userInput)) {
                     break;
                 }
-                out.println(userInput);
+                out.writeUTF(userInput);
             }
             
             socket.close();
