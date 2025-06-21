@@ -7,32 +7,57 @@ import java.util.List;
 
 public class Client implements MessageSubject {
     private Socket socket;
-    private BufferedReader in;
-    private PrintWriter out;
+    private DataInputStream in; // 使用DataInputStream
+    private DataOutputStream out; // 使用DataOutputStream
     private List<MessageObserver> observers = new CopyOnWriteArrayList<>();
     private volatile boolean listening = false;
 
+    // 新增：用于暂停/恢复监听
+    private volatile boolean paused = false;
+    private Thread listenThread;
+    private static final List<Client> allClients = new CopyOnWriteArrayList<>();
+
     public Client(String host, int port) throws IOException {
         this.socket = new Socket(host, port);
-        this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        this.out = new PrintWriter(socket.getOutputStream(), true);
+        // 使用DataInputStream和DataOutputStream
+        this.in = new DataInputStream(socket.getInputStream());
+        this.out = new DataOutputStream(socket.getOutputStream());
+        allClients.add(this);
     }
 
     public Socket getSocket() {
         return socket;
     }
 
+    // 新增：提供对输入流的访问
+    public DataInputStream getDataInputStream() {
+        return in;
+    }
+
+    // 新增：提供对输出流的访问
+    public DataOutputStream getDataOutputStream() {
+        return out;
+    }
+
     public void sendMessage(String message) {
-        out.println(message);
+        try {
+            out.writeUTF(message);
+            out.flush();
+        } catch (IOException e) {
+            // 在实际应用中，这里应该有更完善的异常处理
+            e.printStackTrace();
+        }
     }
 
     public String receiveMessage() throws IOException {
-        return in.readLine();
+        return in.readUTF(); // 使用readUTF
     }
 
     public void close() throws IOException {
         listening = false;
-        socket.close();
+        if (in != null) in.close();
+        if (out != null) out.close();
+        if (socket != null) socket.close();
     }
 
     public void addObserver(MessageObserver observer) {
@@ -53,15 +78,24 @@ public class Client implements MessageSubject {
     public void startListening() {
         if (listening) return;
         listening = true;
-        Thread t = new Thread(() -> {
+        listenThread = new Thread(() -> {
             try {
                 String serverMessage;
                 while (listening && (serverMessage = receiveMessage()) != null) {
+                    // === 新增：支持暂停 ===
+                    synchronized (this) {
+                        while (paused) {
+                            try {
+                                this.wait();
+                            } catch (InterruptedException e) {
+                                // ignore
+                            }
+                        }
+                    }
                     final String msg = serverMessage;
                     for (MessageObserver observer : observers) {
                         javax.swing.SwingUtilities.invokeLater(() -> {
                             observer.onMessageReceived(msg);
-
                         });
                     }
                 }
@@ -69,15 +103,38 @@ public class Client implements MessageSubject {
                 // 可在UI层处理断开
             }
         });
-        t.setDaemon(true);
-        t.start();
+        listenThread.setDaemon(true);
+        listenThread.start();
+    }
+
+    // 新增：通过socket查找Client实例
+    public static Client getClientBySocket(Socket socket) {
+        for (Client c : allClients) {
+            if (c.socket == socket) return c;
+        }
+        return null;
+    }
+
+    // 新增：暂停监听
+    public void pauseListening() {
+        paused = true;
+    }
+
+    // 新增：恢复监听
+    public void resumeListening() {
+        paused = false;
+        synchronized (this) {
+            this.notifyAll();
+        }
     }
 
     public void stopListening() {
         listening = false;
         try {
             if (socket != null && !socket.isClosed()) {
-                socket.close(); // 关闭套接字
+                // 关闭流会连锁关闭socket
+                if (out != null) out.close();
+                if (in != null) in.close();
             }
         } catch (IOException e) {
             // 处理关闭套接字时的异常

@@ -13,15 +13,16 @@ import com.chat.server.MessageStorage;
 
 public class ClientHandler extends Thread implements UserObserver {
     private Socket socket;
-    private BufferedReader in;
-    private PrintWriter out;
+    private DataInputStream in; // 使用DataInputStream
+    private DataOutputStream out; // 使用DataOutputStream
     private String username;
     private Map<String, MessageHandlerStrategy> handlerStrategies = new HashMap<>();
 
     public ClientHandler(Socket socket) throws IOException {
         this.socket = socket;
-        this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        this.out = new PrintWriter(socket.getOutputStream(), true);
+        // 使用DataInputStream和DataOutputStream
+        this.in = new DataInputStream(socket.getInputStream());
+        this.out = new DataOutputStream(socket.getOutputStream());
 
         // 注册策略，key为大写斜杠命令
         handlerStrategies.put("/F", new GetFriendsHandler());
@@ -44,7 +45,7 @@ public class ClientHandler extends Thread implements UserObserver {
         boolean loggedIn = false;
         try {
             while (!loggedIn) {
-                String initialMessage = in.readLine();
+                String initialMessage = in.readUTF(); // readUTF
 
                 if (initialMessage == null)
                     break;
@@ -52,21 +53,21 @@ public class ClientHandler extends Thread implements UserObserver {
                 if (initialMessage.startsWith("/r")) {
                     String[] parts = initialMessage.trim().split("\\s+");
                     if (parts.length < 3) {
-                        out.println("ERROR: 格式为 /r 用户名 密码");
+                        out.writeUTF("ERROR: 格式为 /r 用户名 密码"); // writeUTF
                         continue;
                     }
                     String username = parts[1];
                     String password = parts[2];
                     if (UserDatabase.registerUser(username, password)) {
-                        out.println("SUCCESS: 注册成功！请用 /l 登录。");
+                        out.writeUTF("SUCCESS: 注册成功！请用 /l 登录。"); // writeUTF
                     } else {
-                        out.println("ERROR: 用户名已存在，请尝试其他用户名。");
+                        out.writeUTF("ERROR: 用户名已存在，请尝试其他用户名。"); // writeUTF
                     }
 
                 } else if (initialMessage.startsWith("/l")) {
                     String[] parts = initialMessage.trim().split("\\s+");
                     if (parts.length < 3) {
-                        out.println("ERROR: 格式为 /l 用户名 密码");
+                        out.writeUTF("ERROR: 格式为 /l 用户名 密码"); // writeUTF
                         continue;
                     }
                     String tryUsername = parts[1];
@@ -82,35 +83,37 @@ public class ClientHandler extends Thread implements UserObserver {
 
                         Server.addClient(username, this);
                         loggedIn = true;
-                        out.println("SUCCESS: 登录成功！您可以开始聊天了。");
+                        out.writeUTF("SUCCESS: 登录成功！您可以开始聊天了。"); // writeUTF
 
                         showRecentMessagesOnLogin(); // 显示历史消息
 
                     } else if (loginStatus == UserDatabase.LOGIN_ALREADY_ONLINE) {
-                        out.println("ERROR: 该用户已在线，不允许重复登录。");
+                        out.writeUTF("ERROR: 该用户已在线，不允许重复登录。"); // writeUTF
                     } else if (loginStatus == UserDatabase.LOGIN_PASSWORD_ERROR) {
-                        out.println("ERROR: 密码错误，请重试。");
+                        out.writeUTF("ERROR: 密码错误，请重试。"); // writeUTF
                     } else if (loginStatus == UserDatabase.LOGIN_USER_NOT_FOUND) {
-                        out.println("ERROR: 用户不存在，请先注册。");
+                        out.writeUTF("ERROR: 用户不存在，请先注册。"); // writeUTF
                     } else {
-                        out.println("ERROR: 登录失败。");
+                        out.writeUTF("ERROR: 登录失败。"); // writeUTF
                     }
 
                 } else {
-                    out.println("请先注册或登录！");
+                    out.writeUTF("请先注册或登录！"); // writeUTF
                 }
             }
-            
+
             String message;
-            while ((username != null) && (message = in.readLine()) != null) {
+            while ((username != null) && (message = in.readUTF()) != null) { // readUTF
                 String command = message.startsWith("/") ? message.split("\\s+")[0].toUpperCase() : "DEFAULT";
                 MessageHandlerStrategy strategy = handlerStrategies.getOrDefault(command,
                         handlerStrategies.get("DEFAULT"));
                 strategy.handle(message, this);
             }
 
+        } catch (EOFException e) {
+            System.out.println(username + " 客户端关闭了连接。");
         } catch (IOException e) {
-            out.println(username + " 已断开连接");
+            System.out.println(username + " 已断开连接: " + e.getMessage());
         } finally {
             if (username != null) {
                 ClientHandler current = Server.getClient(username);
@@ -134,7 +137,7 @@ public class ClientHandler extends Thread implements UserObserver {
         }
     }
 
-    
+
     @Override
     public void onUserStatusChanged(User user) {
         // 好友上线/下线时回调，发送状态更新
@@ -147,7 +150,12 @@ public class ClientHandler extends Thread implements UserObserver {
      */
     public void send(String message) {
         synchronized (out) {
-            out.println(message);
+            try {
+                out.writeUTF(message);
+                out.flush();
+            } catch (IOException e) {
+                System.err.println("向 " + username + " 发送消息失败: " + e.getMessage());
+            }
         }
     }
 
@@ -171,10 +179,10 @@ public class ClientHandler extends Thread implements UserObserver {
     private void showRecentMessagesOnLogin() {
         var messages = MessageStorage.getUserMessages(username, 5); // 显示最近5条消息
         if (!messages.isEmpty()) {
-            out.println("=== 最近消息记录 ===");
+            send("=== 最近消息记录 ===");
             // 按时间正序显示（最早的在前）
             for (int i = messages.size() - 1; i >= 0; i--) {
-                out.println(messages.get(i).toString());
+                send(messages.get(i).toString());
             }
 
         }
@@ -418,10 +426,10 @@ public class ClientHandler extends Thread implements UserObserver {
     class DefaultMessageHandler implements MessageHandlerStrategy {
         public void handle(String message, ClientHandler handler) {
             // 保存群聊消息到存储
-            MessageStorage.saveMessage(username, null, message, MessageStorage.MessageType.GROUP);
-
-            System.out.println(username + ": " + message);
-            Server.broadcast(username + ": " + message);
+//            MessageStorage.saveMessage(username, null, message, MessageStorage.MessageType.GROUP);
+//
+//            System.out.println(username + ": " + message);
+//            Server.broadcast(username + ": " + message);
         }
     }
 
@@ -558,13 +566,14 @@ public class ClientHandler extends Thread implements UserObserver {
                 System.out.println("正在保存文件到: " + filePath); // 添加日志
 
                 // 接收文件数据
+                // 关键：使用handler持有的统一输入流，而不是从socket获取新流
+                DataInputStream dataIn = handler.in;
                 FileOutputStream fos = new FileOutputStream(file);
-                InputStream in = socket.getInputStream();
                 byte[] buffer = new byte[8192];
                 long remainingBytes = fileSize;
 
                 while (remainingBytes > 0) {
-                    int read = in.read(buffer, 0, (int) Math.min(buffer.length, remainingBytes));
+                    int read = dataIn.read(buffer, 0, (int) Math.min(buffer.length, remainingBytes));
                     if (read == -1) break;
                     fos.write(buffer, 0, read);
                     remainingBytes -= read;
@@ -623,44 +632,59 @@ public class ClientHandler extends Thread implements UserObserver {
         @Override
         public void handle(String message, ClientHandler handler) {
             System.out.println("接收到文件下载请求: " + message);
-            try {
-                String[] parts = message.split(" ", 2);
-                if (parts.length < 2) {
-                    handler.send("ERROR:无效的下载请求");
-                    return;
-                }
-
-                String fileId = parts[1];
-                FileInfo fileInfo = FileDatabase.getFileInfo(fileId);
-                if (fileInfo == null) {
-                    handler.send("ERROR:文件不存在");
-                    return;
-                }
-
-                File file = new File(fileInfo.getPath());
-                if (!file.exists()) {
-                    handler.send("ERROR:文件不存在");
-                    return;
-                }
-
-                // 发送文件
-                DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
-                dos.writeUTF("FILE_DATA");
-                dos.writeUTF(fileInfo.getName());
-                dos.writeLong(file.length());
-
-                try (FileInputStream fis = new FileInputStream(file)) {
-                    byte[] buffer = new byte[4096];
-                    int bytesRead;
-                    while ((bytesRead = fis.read(buffer)) != -1) {
-                        dos.write(buffer, 0, bytesRead);
+            // 关键：使用handler持有的统一输出流，并确保线程安全
+            DataOutputStream dos = handler.out;
+            synchronized (dos) {
+                try {
+                    String[] parts = message.trim().split("\\s+", 2);
+                    if (parts.length < 2) {
+                        dos.writeUTF("ERROR:无效的下载请求");
+                        dos.flush();
+                        return;
                     }
-                    dos.flush();
-                }
 
-            } catch (IOException e) {
-                handler.send("ERROR:文件下载失败: " + e.getMessage());
-                System.out.println("文件下载处理异常: " + e.getMessage());
+                    String fileId = parts[1];
+                    FileInfo fileInfo = FileDatabase.getFileInfo(fileId);
+                    if (fileInfo == null) {
+                        dos.writeUTF("ERROR:文件不存在");
+                        dos.flush();
+                        return;
+                    }
+
+                    File file = new File(fileInfo.getPath());
+                    if (!file.exists()) {
+                        dos.writeUTF("ERROR:文件不存在");
+                        dos.flush();
+                        return;
+                    }
+
+                    // 发送文件数据
+                    dos.writeUTF("FILE_DATA");
+                    dos.writeUTF(fileInfo.getName());
+                    dos.writeLong(file.length());
+                    dos.flush();
+
+                    try (FileInputStream fis = new FileInputStream(file)) {
+                        byte[] buffer = new byte[4096];
+                        int bytesRead;
+                        while ((bytesRead = fis.read(buffer)) != -1) {
+                            dos.write(buffer, 0, bytesRead);
+                        }
+                        dos.flush();
+                    }
+
+                    // === 关键：此处不要再用 handler.send()/out.println() 发送任何内容 ===
+
+                } catch (IOException e) {
+                    try {
+                        // 异常也通过同一个流发送
+                        dos.writeUTF("ERROR:文件下载失败: " + e.getMessage());
+                        dos.flush();
+                    } catch (IOException ex) {
+                        // ignore
+                    }
+                    System.out.println("文件下载处理异常: " + e.getMessage());
+                }
             }
         }
     }

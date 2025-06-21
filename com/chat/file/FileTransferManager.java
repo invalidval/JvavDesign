@@ -15,25 +15,22 @@ public class FileTransferManager {
     }
 
     public static void uploadFile(Socket socket, File file, String targetId, boolean isGroup) throws IOException {
-        PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
+        com.chat.client.Client client = com.chat.client.Client.getClientBySocket(socket);
+        if (client == null) {
+            throw new IOException("无法找到与Socket关联的客户端实例");
+        }
+        DataOutputStream dos = client.getDataOutputStream();
 
         // 1. 发送文件命令
-        String command = String.format("/file %s %d %s %s",
+        String command = String.format("/FILE %s %d %s %s",
                 file.getName(), file.length(), targetId, isGroup);
         System.out.println("准备发送文件命令: " + command);
-        writer.println(command);
-        writer.flush();
+        dos.writeUTF(command);
+        dos.flush();
 
-        // 2. 等待一小段时间确保命令被处理
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        // 3. 发送文件内容
+        // 2. 发送文件内容 (不再需要sleep)
         try (FileInputStream fis = new FileInputStream(file)) {
-            OutputStream out = socket.getOutputStream();
+            OutputStream out = dos;
             byte[] buffer = new byte[8192];
             int bytesRead;
             while ((bytesRead = fis.read(buffer)) != -1) {
@@ -46,20 +43,29 @@ public class FileTransferManager {
 
     public static void downloadFile(Socket socket, String fileId, String savePath, FileTransferListener listener) {
         new Thread(() -> {
+            com.chat.client.Client client = com.chat.client.Client.getClientBySocket(socket);
+            boolean paused = false;
+            if (client != null) {
+                client.pauseListening();
+                paused = true;
+            } else {
+                if (listener != null) {
+                    SwingUtilities.invokeLater(() -> listener.onError("无法找到客户端实例"));
+                }
+                return;
+            }
+
             try {
-                // 使用PrintWriter发送命令
-                PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
-                writer.println("/DOWNLOAD " + fileId);  // 与服务器端的注册命令大小写一致
-                System.out.println("发送下载请求: /DOWNLOAD " + fileId);
-                writer.flush();
+                // 使用Client持有的统一流
+                DataOutputStream dos = client.getDataOutputStream();
+                DataInputStream dis = client.getDataInputStream();
 
-                // 给服务器一点处理时间
-                Thread.sleep(7000);
+                // 发送下载命令
+                dos.writeUTF("/DOWNLOAD " + fileId);
+                dos.flush();
 
-                // 使用DataInputStream读取响应
-                DataInputStream dis = new DataInputStream(socket.getInputStream());
+                // 读取响应
                 String response = dis.readUTF();
-                System.out.println("收到服务器响应: " + response);
 
                 if ("FILE_DATA".equals(response)) {
                     String fileName = dis.readUTF();
@@ -73,7 +79,7 @@ public class FileTransferManager {
                         int count = 0;
 
                         while (received < fileSize) {
-                            int bytesRead = dis.read(buffer);
+                            int bytesRead = dis.read(buffer, 0, (int)Math.min(buffer.length, fileSize - received));
                             if (bytesRead == -1) break;
                             fos.write(buffer, 0, bytesRead);
                             received += bytesRead;
@@ -94,20 +100,31 @@ public class FileTransferManager {
                             SwingUtilities.invokeLater(() -> listener.onComplete(savePath));
                         }
                     }
+                } else if (response.startsWith("ERROR:")) {
+                    String error = response.substring(6);
+                    System.err.println("服务器错误: " + error);
+                    if (listener != null) {
+                        SwingUtilities.invokeLater(() -> listener.onError(error));
+                    }
                 } else {
-                    String error = "服务器响应错误: " + response;
+                    // 这里处理的就是你遇到的读取错位问题，服务器的响应不是预期的 "FILE_DATA" 或 "ERROR:"
+                    String error = "服务器响应错误或流数据错位: " + response;
                     System.err.println(error);
                     if (listener != null) {
                         SwingUtilities.invokeLater(() -> listener.onError(error));
                     }
                 }
 
-            } catch (IOException | InterruptedException e) {
+            } catch (IOException e) {
                 String error = "下载文件时出错: " + e.getMessage();
                 System.err.println(error);
                 e.printStackTrace();
                 if (listener != null) {
                     SwingUtilities.invokeLater(() -> listener.onError(error));
+                }
+            } finally {
+                if (paused && client != null) {
+                    client.resumeListening();
                 }
             }
         }).start();
