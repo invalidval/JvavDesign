@@ -5,6 +5,8 @@ import com.chat.client.MessageObserver;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -53,7 +55,7 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             if (bgImage != null) {
-                // 自动缩放填充整个面���
+                // 自动缩放填充整个面板
                 g.drawImage(bgImage, 0, 0, getWidth(), getHeight(), this);
             }
         }
@@ -74,11 +76,28 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
             }
         } catch (Exception e) {
             // 读取失败则用默认标题
+            title = "你的医生呢？放弃治疗了？" + e.toString();
         }
         frame = new JFrame(title);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(700, 500);
         frame.setLayout(new CardLayout());
+
+
+        // 添加窗口关闭监听，释放资源
+        frame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                if (client != null) {
+
+                    client.sendMessage("/logout"); // 发送登出指令
+                    client.stopListening();
+                    client.removeObserver(ChatApp.this);
+
+                }
+                // 可添加其他清理操作
+            }
+        });
 
         createLoginPanel();
 
@@ -346,6 +365,7 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
             System.exit(1);
         }
     }
+
 
     // 消息列表面板
     class MessageListPanel extends JPanel {

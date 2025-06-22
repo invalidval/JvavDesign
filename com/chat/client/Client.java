@@ -51,12 +51,6 @@ public class Client implements MessageSubject {
         return in.readUTF(); // 使用readUTF
     }
 
-    public void close() throws IOException {
-        listening = false;
-        if (in != null) in.close();
-        if (out != null) out.close();
-        if (socket != null) socket.close();
-    }
 
     public void addObserver(MessageObserver observer) {
         observers.add(observer);
@@ -68,7 +62,9 @@ public class Client implements MessageSubject {
 
     public void notifyObservers(String message) {
         for (MessageObserver observer : observers) {
-            observer.onMessageReceived(message);
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                observer.onMessageReceived(message);
+            });
         }
     }
 
@@ -82,11 +78,7 @@ public class Client implements MessageSubject {
                     String serverMessage = receiveMessage();
                     if (serverMessage == null) break;
                     final String msg = serverMessage;
-                    for (MessageObserver observer : observers) {
-                        javax.swing.SwingUtilities.invokeLater(() -> {
-                            observer.onMessageReceived(msg);
-                        });
-                    }
+                    notifyObservers(msg);
                 }
             } catch (IOException e) {
                 // 可在UI层处理断开
@@ -111,6 +103,7 @@ public class Client implements MessageSubject {
                 // 关闭流会连锁关闭socket
                 if (out != null) out.close();
                 if (in != null) in.close();
+                socket.close();
             }
         } catch (IOException e) {
             // 处理关闭套接字时的异常
