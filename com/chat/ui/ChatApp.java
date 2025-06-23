@@ -40,6 +40,29 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
     // 聊天窗口最大数量设置
     private int maxChatWindows = 5;
 
+    // 新增：未读图片消息队列，key=会话名，value=图片消息列表
+    private Map<String, List<ImageMsg>> unreadImages = new ConcurrentHashMap<>();
+    // 图片消息结构体
+    public static class ImageMsg {
+        public String sender;
+        public String fileName;
+        public String imagePath;
+        public boolean isGroup;
+        public ImageMsg(String sender, String fileName, String imagePath, boolean isGroup) {
+            this.sender = sender;
+            this.fileName = fileName;
+            this.imagePath = imagePath;
+            this.isGroup = isGroup;
+        }
+    }
+    // 提供给UI调用：获取并清除未读图片消息
+    public List<ImageMsg> pollUnreadImages(String session, boolean isGroup) {
+        String key = session;
+        List<ImageMsg> list = unreadImages.getOrDefault(key, new ArrayList<>());
+        unreadImages.remove(key);
+        return list;
+    }
+
     // 背景面板内部类
     class BackgroundPanel extends JPanel {
         private Image bgImage;
@@ -263,6 +286,49 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
                 if (groupUI != null) groupUI.onMessageReceived(message);
             } else {
                 if (friendsUI != null) friendsUI.onMessageReceived(message);
+            }
+        } else if (message.startsWith("IMAGE_NOTIFY:")) {
+            // 图片通知分发到好友UI和群聊UI，并在消息栏提示
+            String[] parts = message.split(":");
+            if (parts.length >= 6 && "group".equals(parts[5])) {
+                // 群聊图片
+                if (groupUI != null) groupUI.onMessageReceived(message);
+                String imagePath = parts[4];
+                String sender = parts[3];
+                String groupName = null;
+                if (groupUI != null) {
+                    java.util.List<String> myGroups = null;
+                    try {
+                        java.lang.reflect.Field myGroupsField = groupUI.getClass().getDeclaredField("myGroups");
+                        myGroupsField.setAccessible(true);
+                        myGroups = (java.util.List<String>) myGroupsField.get(groupUI);
+                    } catch (Exception ex) {}
+                    if (myGroups != null) {
+                        for (String g : myGroups) {
+                            if (imagePath.contains(g)) {
+                                groupName = g;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (groupName == null) groupName = "未知群聊";
+                // 存储未读图片消息
+                unreadImages.computeIfAbsent(groupName, k -> new ArrayList<>())
+                    .add(new ImageMsg(sender, parts[1], imagePath, true));
+                sessionLastMsg.put(groupName, sender + ": [图片]");
+                sessionIsGroup.put(groupName, true);
+                if (messageListPanel != null) messageListPanel.refresh();
+            } else if (parts.length >= 5) {
+                // 私聊图片
+                if (friendsUI != null) friendsUI.onMessageReceived(message);
+                String sender = parts[3];
+                String imagePath = parts[4];
+                unreadImages.computeIfAbsent(sender, k -> new ArrayList<>())
+                    .add(new ImageMsg(sender, parts[1], imagePath, false));
+                sessionLastMsg.put(sender, sender + ": [图片]");
+                sessionIsGroup.put(sender, false);
+                if (messageListPanel != null) messageListPanel.refresh();
             }
         }
     }

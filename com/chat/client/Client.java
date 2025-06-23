@@ -11,11 +11,13 @@ public class Client implements MessageSubject {
     private DataOutputStream out; // 使用DataOutputStream
     private List<MessageObserver> observers = new CopyOnWriteArrayList<>();
     private volatile boolean listening = false;
+    private String host; // 新增字段，保存服务器host
 
     private Thread listenThread;
     private static final List<Client> allClients = new CopyOnWriteArrayList<>();
 
     public Client(String host, int port) throws IOException {
+        this.host = host;
         this.socket = new Socket(host, port);
         // 使用DataInputStream和DataOutputStream
         this.in = new DataInputStream(socket.getInputStream());
@@ -109,6 +111,10 @@ public class Client implements MessageSubject {
             // 处理关闭套接字时的异常
             e.printStackTrace();
         }
+    }
+
+    public String getHost() {
+        return host;
     }
 }
 

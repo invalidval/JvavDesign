@@ -12,6 +12,7 @@ import com.chat.model.User;
 
 public class Server implements UserDatabase.UserDatabaseObserver {
     private static final int PORT = 8888;
+    public static final int IMAGE_PORT = 18989;
     private static ConcurrentHashMap<String, ClientHandler> clients = new ConcurrentHashMap<>();
     private static ExecutorService threadPool;
     private static Server serverInstance = new Server();
@@ -38,10 +39,24 @@ public class Server implements UserDatabase.UserDatabaseObserver {
 
     public static void main(String[] args) throws IOException {
         ServerSocket serverSocket = new ServerSocket(PORT, 50, InetAddress.getByName("0.0.0.0"));
+        ServerSocket imageSocket = new ServerSocket(IMAGE_PORT, 50, InetAddress.getByName("0.0.0.0"));
         System.out.println("服务器已启动，等待客户端连接...");
         // 创建文件存储目录
         new File("files/groups/").mkdirs();
         new File("files/private/").mkdirs();
+        new File("files/images/").mkdirs();
+        // 启动图片端口监听线程
+        new Thread(() -> {
+            while (true) {
+                try {
+                    Socket imgSock = imageSocket.accept();
+                    threadPool.execute(new ClientHandler.ImageSocketHandler(imgSock));
+                } catch (IOException e) {
+                    System.out.println("图片端口监听异常: " + e.getMessage());
+                }
+            }
+        }, "ImagePortListener").start();
+        // 主消息端口监听
         while (true) {
             Socket socket = serverSocket.accept();
             threadPool.execute(new ClientHandler(socket));
