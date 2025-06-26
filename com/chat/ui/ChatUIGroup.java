@@ -25,14 +25,17 @@ public class ChatUIGroup implements MessageObserver {
     private String currentUser;
     private Map<String, GroupChatWindow> groupChats = new ConcurrentHashMap<>();
     private List<String> myGroups = new ArrayList<>();
+    private List<String> allGroups = new ArrayList<>(); // 新增：所有群聊列表
     private Map<String, List<String>> groupMembers = new HashMap<>();
     private ChatWindowLimitProvider limitProvider;
+    private SubGroupUI subGroupUI;
 
     public ChatUIGroup(Client client, JFrame parentFrame, String currentUser, ChatWindowLimitProvider limitProvider) {
         this.client = client;
         this.parentFrame = parentFrame;
         this.currentUser = currentUser;
-        this.limitProvider = limitProvider; // 接收 ChatWindowLimitProvider 实例
+        this.limitProvider = limitProvider;
+        this.subGroupUI = new SubGroupUI(client, parentFrame, currentUser);
         createGroupPanel();
         requestGroupList();
     }
@@ -89,192 +92,247 @@ public class ChatUIGroup implements MessageObserver {
     }
 
     private void showGroupList() {
+        System.out.println("[DEBUG] showGroupList() called");
         groupListPanel.removeAll();
+        // 标题美化
+        JLabel myGroupTitle = new JLabel("我的群聊");
+        myGroupTitle.setFont(new Font("微软雅黑", Font.BOLD, 18));
+        myGroupTitle.setBorder(BorderFactory.createEmptyBorder(10, 10, 5, 0));
+        groupListPanel.add(myGroupTitle);
+        // 我的群聊分区
         if (myGroups.isEmpty()) {
-            JLabel emptyLabel = new JLabel("暂无群聊");
+            System.out.println("[DEBUG] myGroups is empty");
+            JLabel emptyLabel = new JLabel("暂无我的群聊");
             emptyLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
             groupListPanel.add(emptyLabel);
         } else {
+            System.out.println("[DEBUG] myGroups: " + myGroups);
             for (String group : myGroups) {
+                System.out.println("[DEBUG] show myGroup: " + group);
                 JPanel groupCard = new JPanel(new BorderLayout());
-                groupCard.setMaximumSize(new Dimension(600, 40));
-                groupCard.setPreferredSize(new Dimension(600, 40));
-                groupCard.setMinimumSize(new Dimension(600, 40));
-                groupCard.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+                groupCard.setMaximumSize(new Dimension(600, 48));
+                groupCard.setPreferredSize(new Dimension(600, 48));
+                groupCard.setMinimumSize(new Dimension(600, 48));
+                groupCard.setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(new Color(180,180,180), 1, true),
+                        BorderFactory.createEmptyBorder(6, 16, 6, 16)));
+                groupCard.setBackground(new Color(245, 250, 255));
                 groupCard.setAlignmentX(Component.LEFT_ALIGNMENT);
-
                 JLabel groupLabel = new JLabel(group);
+                groupLabel.setFont(new Font("微��雅黑", Font.PLAIN, 16));
                 JButton chatButton = new JButton("进入群聊");
+                chatButton.setFocusable(false);
                 chatButton.addActionListener(e -> openGroupChatWindow(group));
+                JButton subGroupButton = new JButton("小组管理");
+                subGroupButton.setFocusable(false);
+                subGroupButton.addActionListener(e -> showSubGroupDialog(group));
+                JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+                btnPanel.setOpaque(false);
+                btnPanel.add(chatButton);
+                btnPanel.add(subGroupButton);
                 groupCard.add(groupLabel, BorderLayout.CENTER);
-                groupCard.add(chatButton, BorderLayout.EAST);
+                groupCard.add(btnPanel, BorderLayout.EAST);
                 groupListPanel.add(groupCard);
-                groupListPanel.add(Box.createVerticalStrut(6));
+                groupListPanel.add(Box.createVerticalStrut(8));
             }
+        }
+        // 其他群聊分区（仅展示未加入的群聊）
+        if (allGroups != null && !allGroups.isEmpty()) {
+            System.out.println("[DEBUG] allGroups: " + allGroups);
+            List<String> otherGroups = new ArrayList<>();
+            for (String g : allGroups) {
+                if (!myGroups.contains(g)) otherGroups.add(g);
+            }
+            System.out.println("[DEBUG] otherGroups: " + otherGroups);
+            if (!otherGroups.isEmpty()) {
+                JLabel otherGroupTitle = new JLabel("其他群聊");
+                otherGroupTitle.setFont(new Font("微软雅黑", Font.BOLD, 18));
+                otherGroupTitle.setBorder(BorderFactory.createEmptyBorder(16, 10, 5, 0));
+                groupListPanel.add(otherGroupTitle);
+                for (String group : otherGroups) {
+                    System.out.println("[DEBUG] show otherGroup: " + group);
+                    JPanel groupCard = new JPanel(new BorderLayout());
+                    groupCard.setMaximumSize(new Dimension(600, 44));
+                    groupCard.setPreferredSize(new Dimension(600, 44));
+                    groupCard.setMinimumSize(new Dimension(600, 44));
+                    groupCard.setBorder(BorderFactory.createCompoundBorder(
+                            BorderFactory.createLineBorder(new Color(220,220,220), 1, true),
+                            BorderFactory.createEmptyBorder(4, 16, 4, 16)));
+                    groupCard.setBackground(new Color(255, 252, 240));
+                    groupCard.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    JLabel groupLabel = new JLabel(group);
+                    groupLabel.setFont(new Font("微软雅黑", Font.PLAIN, 15));
+                    JButton joinButton = new JButton("加入群聊");
+                    joinButton.setFocusable(false);
+                    joinButton.addActionListener(e -> {
+                        int ok = JOptionPane.showConfirmDialog(parentFrame, "确定要加入群聊："+group+"？", "加入确认", JOptionPane.YES_NO_OPTION);
+                        if (ok == JOptionPane.YES_OPTION) {
+                            client.sendMessage("/jg " + group);
+                        }
+                    });
+                    JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+                    btnPanel.setOpaque(false);
+                    btnPanel.add(joinButton);
+                    groupCard.add(groupLabel, BorderLayout.CENTER);
+                    groupCard.add(btnPanel, BorderLayout.EAST);
+                    groupListPanel.add(groupCard);
+                    groupListPanel.add(Box.createVerticalStrut(6));
+                }
+            }
+        } else {
+            System.out.println("[DEBUG] allGroups is null or empty");
         }
         groupListPanel.revalidate();
         groupListPanel.repaint();
+        System.out.println("[DEBUG] showGroupList() finished");
     }
 
-    // 返回当前已打开的群聊窗口数
-    public int getOpenChatWindowCount() {
-        int openCount = 0;
-        for (GroupChatWindow win : groupChats.values()) {
-            if (win != null && win.isDisplayable()) openCount++;
-        }
-        return openCount;
+    // ================== 小组信息缓存与唯一性校验相关 ==================
+    private Map<String, String> subGroupInfoCache = new HashMap<>();
+    // 缓存每个群的小组成员分布，key=groupName，value=Map<subGroupId, Set<member>>
+    private Map<String, Map<String, Set<String>>> subGroupMemberMap = new HashMap<>();
+    // 小组聊天窗口管理
+    private Map<String, SubGroupChatWindow> subGroupChats = new ConcurrentHashMap<>();
+    // 新增：记录最近���求小组列表的群名
+    private String lastSGListGroupName = null;
+    // 新增：缓存每个群的小组面板对象，便于SG_LIST消息刷新
+    private Map<String, JPanel> groupSubGroupPanelMap = new HashMap<>();
+    public void openSubGroupChatWindow(String groupName, String subGroupId) {
+        subGroupUI.openSubGroupChatWindow(groupName, subGroupId);
     }
-
-    public void openGroupChatWindow(String groupName) {
-        // 统一计数所有聊天窗口（私聊+群聊）
-        int max = limitProvider.getMaxChatWindows();
-        int totalOpen = limitProvider.getCurrentOpenChatWindowCount();
-        if (!groupChats.containsKey(groupName) && totalOpen >= max) {
-            JOptionPane.showMessageDialog(parentFrame, "已达到最大聊天窗口数(" + max + ")，请先关闭其他窗口！", "提示", JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-        GroupChatWindow win = groupChats.get(groupName);
-        if (win == null || !win.isDisplayable()) {
-            win = new GroupChatWindow(groupName);
-            win.setSize(600, 400);
-            groupChats.put(groupName, win);
-        }
-        win.setTitle("群聊 - " + groupName);
-        win.setLocationRelativeTo(null);
-        win.setVisible(true);
-        win.toFront();
-        // 新增：加载未读图片消息（反射兼容ChatApp类型）
-        if (parentFrame.getClass().getSimpleName().equals("ChatApp")) {
-            try {
-                java.lang.reflect.Method pollMethod = parentFrame.getClass().getMethod("pollUnreadImages", String.class, boolean.class);
-                java.util.List<?> imgs = (java.util.List<?>) pollMethod.invoke(parentFrame, groupName, true);
-                for (Object img : imgs) {
-                    java.lang.reflect.Field senderField = img.getClass().getDeclaredField("sender");
-                    java.lang.reflect.Field fileNameField = img.getClass().getDeclaredField("fileName");
-                    java.lang.reflect.Field imagePathField = img.getClass().getDeclaredField("imagePath");
-                    senderField.setAccessible(true);
-                    fileNameField.setAccessible(true);
-                    imagePathField.setAccessible(true);
-                    String sender = (String) senderField.get(img);
-                    String fileName = (String) fileNameField.get(img);
-                    String imagePath = (String) imagePathField.get(img);
-                    win.appendImageMessage(sender, fileName, imagePath);
-                }
-            } catch (Exception ex) {
-                // 反射失败忽略
-            }
+    // 新增：小组列表消息回调
+    public void onSubGroupListReceived(String groupName, String info) {
+        if (subGroupUI != null) {
+            subGroupUI.onSubGroupListReceived(groupName, info);
         }
     }
 
-    @Override
-    public void onMessageReceived(String message) {
-        if (message == null) return;
-        if (message.startsWith("GROUPS:")) {
-            // 服务器返回群列表，格式：GROUPS:群1,群2,...
-            String[] groups = message.substring(7).split(",");
-            myGroups = new ArrayList<>();
-            for (String g : groups) {
-                if (!g.trim().isEmpty()) myGroups.add(g.trim());
-            }
-            showGroupList();
-        } else if (message.startsWith("GROUPMEMBERS:")) {
-            // 服务器返回群成员，格式：GROUPMEMBERS:群名:成员1,成员2,...
-            String[] arr = message.split(":", 3);
-            if (arr.length == 3) {
-                String group = arr[1];
-                List<String> members = Arrays.asList(arr[2].split(","));
-                groupMembers.put(group, members);
-            }
-        } else if (message.startsWith("[群聊]")) {
-            // 格式: [群聊] 群名|发送者: 消息
-            int idx1 = message.indexOf("] ");
-            int idx2 = message.indexOf("|", idx1 + 2);
-            int idx3 = message.indexOf(":", idx2 + 1);
-            if (idx1 != -1 && idx2 != -1 && idx3 != -1) {
-                String group = message.substring(idx1 + 2, idx2).trim();
-                String sender = message.substring(idx2 + 1, idx3).trim();
-                String msg = message.substring(idx3 + 1).trim();
-                saveGroupMessageToLocal(group, sender, msg); // 修正：传入sender和msg
-                GroupChatWindow win = groupChats.get(group);
-                if (win != null && win.isDisplayable()) {
-                    win.appendMessage(sender + ": " + msg);
-                    win.setVisible(true);
-                }
-                // 不再自动弹出聊天窗口
-            }
-        } else if (message.startsWith("SUCCESS: 创建群聊成功")) {
-            JOptionPane.showMessageDialog(parentFrame, message);
-            requestGroupList();
-        } else if (message.startsWith("SUCCESS: 加入群聊成功")) { // 新增处理加入群聊成功的消息
-            JOptionPane.showMessageDialog(parentFrame, message);
-            requestGroupList(); // 刷新群聊列表
-        } else if (message.startsWith("ERROR: 加入群聊失败")) { // 新增处理加入群聊失败的消息
-            JOptionPane.showMessageDialog(parentFrame, message, "错误", JOptionPane.ERROR_MESSAGE);
-        } else if (message.startsWith("FILE_NOTIFY:")) {
-            String[] parts = message.split(":");
-            String fileId = parts[1];
-            String fileName = parts[2];
-            long fileSize = Long.parseLong(parts[3]);
-            String sender = parts[4];
-            String targetId = parts[5]; // 群名
-
-            // 保存文件记录到历史
-            FileRecord record = new FileRecord(fileId, fileName, fileSize, sender, targetId, true, System.currentTimeMillis());
-            FileHistoryXmlManager.addRecord(currentUser,true ,sender, record);
-
-            // 打开或创建群聊窗口
-            GroupChatWindow win = groupChats.computeIfAbsent(targetId, gn -> {
-                GroupChatWindow w = new GroupChatWindow(gn);
-                w.setVisible(true);
-                return w;
-            });
-
-            // 在群聊窗口中显示文件接收提示
-            win.showFileReceiveDialog(fileId, fileName, fileSize, sender);
-        } else if (message.startsWith("IMAGE_NOTIFY:")) {
-            // 群聊图片通知格式: IMAGE_NOTIFY:文件名:文件大小:发送者:图片路径:group
-            String[] parts = message.split(":");
-            if (parts.length >= 6 && "group".equals(parts[5])) {
-                String fileName = parts[1];
-                long fileSize = Long.parseLong(parts[2]);
-                String sender = parts[3];
-                String imagePath = parts[4];
-                String groupName = null;
-                for (String g : myGroups) {
-                    if (imagePath.contains(g)) {
-                        groupName = g;
-                        break;
-                    }
-                }
-                if (groupName == null) groupName = "未知群聊";
-                saveGroupMessageToLocal(groupName, sender, "[图片] " + fileName + " " + imagePath); // 修正：带上sender
-                // 不再自动弹出聊天窗口，仅在消息栏提示
-                if (parentFrame.getClass().getSimpleName().equals("ChatApp")) {
+    // ================== 小组聊天窗口内部类 ==================
+    class SubGroupChatWindow extends JFrame {
+        private JTextPane chatArea;
+        private JTextField inputField;
+        private String groupName, subGroupId;
+        private JTabbedPane tabbedPane;
+        private JPanel chatPanel;
+        private FileListPanel fileListPanel;
+        public SubGroupChatWindow(String groupName, String subGroupId) {
+            super("小组聊天 - " + groupName + " | 小组ID:" + subGroupId);
+            this.groupName = groupName;
+            this.subGroupId = subGroupId;
+            setSize(600, 400);
+            setLayout(new BorderLayout());
+            tabbedPane = new JTabbedPane();
+            chatPanel = new JPanel(new BorderLayout());
+            fileListPanel = new FileListPanel(client, currentUser, true, groupName + "#" + subGroupId, this);
+            chatArea = new JTextPane();
+            chatArea.setEditable(false);
+            JScrollPane scrollPane = new JScrollPane(chatArea);
+            // TODO: 加载本地小组聊天记录（可选）
+            inputField = new JTextField();
+            JButton sendButton = new JButton("发送");
+            sendButton.addActionListener(e -> sendMessage());
+            inputField.addActionListener(e -> sendMessage());
+            JPanel inputPanel = new JPanel(new BorderLayout());
+            inputPanel.add(inputField, BorderLayout.CENTER);
+            inputPanel.add(sendButton, BorderLayout.EAST);
+            // 图片发送按钮
+            JButton sendImageButton = new JButton("发送图片");
+            sendImageButton.addActionListener(e -> sendImageAction());
+            inputPanel.add(sendImageButton, BorderLayout.WEST);
+            chatPanel.add(scrollPane, BorderLayout.CENTER);
+            chatPanel.add(inputPanel, BorderLayout.SOUTH);
+            tabbedPane.addTab("聊天", chatPanel);
+            tabbedPane.addTab("文件", fileListPanel);
+            add(tabbedPane, BorderLayout.CENTER);
+            // 文件发送按钮
+            JButton fileButton = new JButton("发送文件");
+            fileButton.addActionListener(e -> {
+                JFileChooser fileChooser = new JFileChooser();
+                if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                    File selectedFile = fileChooser.getSelectedFile();
                     try {
-                        java.lang.reflect.Field sessionLastMsgField = parentFrame.getClass().getDeclaredField("sessionLastMsg");
-                        java.lang.reflect.Field sessionIsGroupField = parentFrame.getClass().getDeclaredField("sessionIsGroup");
-                        java.lang.reflect.Field messageListPanelField = parentFrame.getClass().getDeclaredField("messageListPanel");
-                        sessionLastMsgField.setAccessible(true);
-                        sessionIsGroupField.setAccessible(true);
-                        messageListPanelField.setAccessible(true);
-                        java.util.Map<String, String> sessionLastMsg = (java.util.Map<String, String>) sessionLastMsgField.get(parentFrame);
-                        java.util.Map<String, Boolean> sessionIsGroup = (java.util.Map<String, Boolean>) sessionIsGroupField.get(parentFrame);
-                        Object messageListPanel = messageListPanelField.get(parentFrame);
-                        sessionLastMsg.put(groupName, sender + ": [图片]");
-                        sessionIsGroup.put(groupName, true);
-                        if (messageListPanel != null) {
-                            java.lang.reflect.Method refreshMethod = messageListPanel.getClass().getMethod("refresh");
-                            refreshMethod.invoke(messageListPanel);
-                        }
-                    } catch (Exception ex) {
-                        // 反射失败忽略
+                        FileTransferManager.uploadFile(client.getSocket(), selectedFile, groupName + "#" + subGroupId, true, currentUser);
+                        appendMessage("我: 发送文件 " + selectedFile.getName());
+                        JOptionPane.showMessageDialog(this, "文件发送成功!");
+                    } catch (IOException ex) {
+                        JOptionPane.showMessageDialog(this,
+                                "文件发送失败: " + ex.getMessage(),
+                                "错误",
+                                JOptionPane.ERROR_MESSAGE);
                     }
                 }
-                // 可选：如需保存未读图片消息，可扩展此处逻辑
-            } else {
-                // ...existing code...
+            });
+            JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+            buttonPanel.add(fileButton);
+            JPanel bottomPanel = new JPanel(new BorderLayout());
+            bottomPanel.add(buttonPanel, BorderLayout.NORTH);
+            bottomPanel.add(inputPanel, BorderLayout.CENTER);
+            add(bottomPanel, BorderLayout.SOUTH);
+            setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+            addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosed(WindowEvent e) {
+                    subGroupChats.remove(groupName + "#" + subGroupId);
+                }
+            });
+        }
+        private void sendMessage() {
+            String msg = inputField.getText().trim();
+            if (!msg.isEmpty()) {
+                client.sendMessage("/sg_msg " + groupName + " " + subGroupId + " " + msg);
+                appendMessage("我: " + msg);
+                saveGroupMessageToLocal(groupName, msg); // 修正参数，去掉 currentUser
+                inputField.setText("");
             }
         }
+        private void sendImageAction() {
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setDialogTitle("选择要发送的图片");
+            int result = fileChooser.showOpenDialog(this);
+            if (result == JFileChooser.APPROVE_OPTION) {
+                File file = fileChooser.getSelectedFile();
+                if (com.chat.NewFunctions.image.ImageManager.isImageFile(file)) {
+                    try {
+                        int imagePort = 18989;
+                        com.chat.NewFunctions.image.ImageManager.sendImageToServer(
+                                client.getHost(), imagePort, file, groupName + "#" + subGroupId, currentUser + ":group");
+                        appendMessage("[图片已发送: " + file.getName() + "]");
+                    } catch (Exception ex) {
+                        appendMessage("[图片发送失败: " + file.getName() + "]");
+                        JOptionPane.showMessageDialog(this, "图片发送失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(this, "请选择图片文件（jpg/png/gif/bmp）", "提示", JOptionPane.WARNING_MESSAGE);
+                }
+            }
+        }
+        public void appendMessage(String msg) {
+            try {
+                String time = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
+                javax.swing.text.Document doc = chatArea.getDocument();
+                doc.insertString(doc.getLength(), "[" + time + "] " + msg + "\n", null);
+                // 新增：保存群聊消息到本地
+                saveGroupMessageToLocal(groupName, msg);
+            } catch (javax.swing.text.BadLocationException e) {
+                e.printStackTrace();
+            }
+        }
+        // 新增：保存群聊消息到本地
+        private void saveGroupMessageToLocal(String groupName, String msg) {
+            String dirPath = System.getProperty("user.home") + File.separator + "ChatLocalHistory";
+            File dir = new File(dirPath);
+            if (!dir.exists()) dir.mkdirs();
+            String fileName = "chat_group_" + groupName + ".txt";
+            File file = new File(dir, fileName);
+            String time = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
+            String line = String.format("[%s] %s", time, msg);
+            try (java.io.FileWriter fw = new java.io.FileWriter(file, true)) {
+                fw.write(line + "\n");
+            } catch (Exception e) {
+                // 忽略写入异常
+            }
+        }
+        // 可选：图片接收与显示、文件接收等功能可后续补充
     }
 
     private void requestGroupList() {
@@ -304,7 +362,7 @@ public class ChatUIGroup implements MessageObserver {
         private String groupName;
         private JTabbedPane tabbedPane;
         private JPanel chatPanel;
-        private FileListPanel fileListPanel; // 替换原有的文件表格
+        private FileListPanel fileListPanel; // 替��原有的文件表格
 
         public GroupChatWindow(String groupName) {
             super("群聊 - " + groupName);
@@ -401,15 +459,18 @@ public class ChatUIGroup implements MessageObserver {
             String message = inputField.getText().trim();
             if (!message.isEmpty()) {
                 client.sendMessage("/gs " + groupName + " " + message);
-                // 删除本地appendMessage("我: " + message); 只由onMessageReceived处理显示
+                // 立即本地显示消息，保证体验一致
+                appendMessage("我: " + message);
+                saveGroupMessageToLocal(groupName,currentUser, message);
                 inputField.setText("");
             }
         }
 
         public void appendMessage(String msg) {
             try {
+                String time = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
                 javax.swing.text.Document doc = chatArea.getDocument();
-                doc.insertString(doc.getLength(), msg + "\n", null);
+                doc.insertString(doc.getLength(), "[" + time + "] " + msg + "\n", null);
             } catch (javax.swing.text.BadLocationException e) {
                 e.printStackTrace();
             }
@@ -418,7 +479,7 @@ public class ChatUIGroup implements MessageObserver {
         // 新增：群聊图片发送动作
         private void sendImageAction() {
             JFileChooser fileChooser = new JFileChooser();
-            fileChooser.setDialogTitle("选择��发送的图片");
+            fileChooser.setDialogTitle("选择��发送��图片");
             int result = fileChooser.showOpenDialog(this);
             if (result == JFileChooser.APPROVE_OPTION) {
                 File file = fileChooser.getSelectedFile();
@@ -448,9 +509,9 @@ public class ChatUIGroup implements MessageObserver {
             }
         }
 
-        // 新增：群聊图片接收与查看
+        // 新增：群聊图片接��与查看
         public void showImageReceiveDialog(String fileName, long fileSize, String sender, String imagePath) {
-            // 直接插入图片缩略图，不弹窗，仿微信风格
+            // 直接插入图片缩略图，不弹窗，仿微信��格
             appendImageMessage(sender, fileName, imagePath);
         }
 
@@ -490,7 +551,7 @@ public class ChatUIGroup implements MessageObserver {
             }
         }
 
-        // 聊天窗口插入图片消息（自动加载并显示图片缩略图，可点击查看大图）
+        // 聊天窗��插入图片消息（自动加载并显示图片缩略图，���点击查看大图）
         private final Map<Integer, String> imageOffsetMap = new HashMap<>(); // offset -> imagePath
         private boolean imageMouseListenerAdded = false;
         public void appendImageMessage(String sender, String fileName, String imagePath) {
@@ -514,7 +575,7 @@ public class ChatUIGroup implements MessageObserver {
                             out.flush();
                             String resp = in.readUTF();
                             if (!"IMAGE_DATA".equals(resp)) {
-                                SwingUtilities.invokeLater(() -> appendMessage("[图片下载失败: " + resp + "]"));
+                                SwingUtilities.invokeLater(() -> appendMessage("[图片下载失��: " + resp + "]"));
                                 return;
                             }
                             String recvFileName = in.readUTF();
@@ -567,7 +628,7 @@ public class ChatUIGroup implements MessageObserver {
                     javax.swing.text.StyleConstants.setIcon(style, thumbIcon);
                     int insertPos = doc.getLength();
                     doc.insertString(insertPos, "ignored", style);
-                    // 记录图片offset和路径
+                    // 记���图片offset和路径
                     imageOffsetMap.put(insertPos, imagePath);
                     doc.insertString(doc.getLength(), "\n", null);
                     chatArea.setCaretPosition(doc.getLength());
@@ -617,7 +678,7 @@ public class ChatUIGroup implements MessageObserver {
                                                 updateImage.run();
                                             }
                                         });
-                                        // 初始显示
+                                        // 示
                                         updateImage.run();
                                         dialog.setVisible(true);
                                         break;
@@ -646,10 +707,11 @@ public class ChatUIGroup implements MessageObserver {
                 try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(file))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        // 格式: [时间] 发送方ID: 消息内容
+                        // 格式: [时间] 发送方: 消息内容
                         int idx1 = line.indexOf("] ");
                         int idx2 = line.indexOf(":", idx1 + 2);
                         if (idx1 != -1 && idx2 != -1) {
+                            String time = line.substring(0, idx1 + 1); // [时间]
                             String sender = line.substring(idx1 + 2, idx2).trim();
                             String msg = line.substring(idx2 + 1).trim();
                             if (msg.startsWith("[图片] ")) {
@@ -661,7 +723,7 @@ public class ChatUIGroup implements MessageObserver {
                                     continue;
                                 }
                             }
-                            chatArea.getDocument().insertString(chatArea.getDocument().getLength(), line + "\n", null);
+                            chatArea.getDocument().insertString(chatArea.getDocument().getLength(), time + " " + sender + ": " + msg + "\n", null);
                         } else {
                             chatArea.getDocument().insertString(chatArea.getDocument().getLength(), line + "\n", null);
                         }
@@ -672,5 +734,274 @@ public class ChatUIGroup implements MessageObserver {
             }
         }
     }
-}
 
+    // 新增：获取小组UI面板（如需嵌入主界面）
+    public JPanel getSubGroupPanel() {
+        return subGroupUI.getPanel();
+    }
+
+    // ================== 小组管理对话框 ==================
+    private void showSubGroupDialog(String groupName) {
+        this.lastSGListGroupName = groupName; // 修复：同步记录当前请求小组列表的群名
+        subGroupUI.showSubGroupDialog(groupName);
+    }
+
+    // updateSubGroupListPanel 相关界面刷新全部交由 subGroupUI
+    private void updateSubGroupListPanel(String groupName, JPanel subGroupListPanel, JDialog parentDialog) {
+        // 只做转发
+        subGroupUI.getClass(); // 保证subGroupUI已初始化
+        // 这里直接调用subGroupUI的刷新方法
+        // 由于原方法是private，需在SubGroupUI中将updateSubGroupListPanel改为public
+        subGroupUI.updateSubGroupListPanel(groupName, subGroupListPanel, parentDialog);
+    }
+
+    // 实现MessageObserver��口方法
+    @Override
+    public void onMessageReceived(String message) {
+        System.out.println("[DEBUG][ChatUIGroup] 收到消息: " + message); // 调试信息
+        if (message == null) return;
+        // 新增：处理群聊历史消息
+        if (message.startsWith("=== 群聊 ")) {
+            System.out.println("[DEBUG][ChatUIGroup] 处理群聊历史消息: " + message);
+            // 解析群名
+            int idx1 = message.indexOf("群聊 ") + 3;
+            int idx2 = message.indexOf(" 的消息记录", idx1);
+            String groupName = (idx1 != -1 && idx2 != -1) ? message.substring(idx1, idx2).trim() : null;
+            if (groupName != null) {
+                GroupChatWindow win = groupChats.get(groupName);
+                if (win == null || !win.isDisplayable()) {
+                    win = new GroupChatWindow(groupName);
+                    groupChats.put(groupName, win);
+                }
+                win.setVisible(true);
+                win.toFront();
+                // 清空原有内容，准备加载历史
+                win.chatArea.setText("");
+            }
+            return;
+        }
+        // 追加群聊历史消息内容到窗口
+        if (message.startsWith("[")) {
+            System.out.println("[DEBUG][ChatUIGroup] 追加群聊历史消息内容: " + message);
+            // 判断是否为历史消息格式
+            if (message.contains("[群聊]")) {
+                // 跳过，已由后续逻辑处理
+            } else {
+                // 追加到最近打开的群聊窗口
+                if (!groupChats.isEmpty()) {
+                    GroupChatWindow lastWin = null;
+                    for (GroupChatWindow w : groupChats.values()) {
+                        if (w.isVisible()) lastWin = w;
+                    }
+                    if (lastWin != null) {
+                        try {
+                            lastWin.chatArea.getDocument().insertString(lastWin.chatArea.getDocument().getLength(), message + "\n", null);
+                            // 新增：解析历史消息并写入本地
+                            int idx1 = message.indexOf("] ");
+                            int idx2 = message.indexOf(":", idx1 + 2);
+                            if (idx1 != -1 && idx2 != -1) {
+                                String time = message.substring(0, idx1 + 1); // [时间]
+                                String sender = message.substring(idx1 + 2, idx2).trim();
+                                String msg = message.substring(idx2 + 1).trim();
+                                saveGroupMessageToLocal(lastWin.groupName, sender, msg);
+                            }
+                        } catch (javax.swing.text.BadLocationException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            }
+        }
+        if (message.startsWith("GROUPS:")) {
+            System.out.println("[DEBUG][ChatUIGroup] 处理GROUPS消息: " + message);
+            String[] groups = message.substring(7).split(",");
+            myGroups = new ArrayList<>();
+            for (String g : groups) {
+                if (!g.trim().isEmpty()) myGroups.add(g.trim());
+            }
+            System.out.println("[DEBUG][ChatUIGroup] myGroups updated: " + myGroups);
+            // 新增同步allGroups（假设服务器返回所有群聊列表，格式ALLGROUPS:群1,群2,...）
+            SwingUtilities.invokeLater(() -> {
+                System.out.println("[DEBUG][ChatUIGroup] invokeLater showGroupList for myGroups");
+                showGroupList();
+            });
+        } else if (message.startsWith("ALLGROUPS:")) {
+            System.out.println("[DEBUG][ChatUIGroup] 处理ALLGROUPS消息: " + message);
+            String[] groups = message.substring(10).split(",");
+            allGroups = new ArrayList<>();
+            for (String g : groups) {
+                if (!g.trim().isEmpty()) allGroups.add(g.trim());
+            }
+            System.out.println("[DEBUG][ChatUIGroup] allGroups updated: " + allGroups);
+            SwingUtilities.invokeLater(() -> {
+                System.out.println("[DEBUG][ChatUIGroup] invokeLater showGroupList for allGroups");
+                showGroupList();
+            });
+        } else if (message.startsWith("SUCCESS: 创建群聊成功")) {
+            System.out.println("[DEBUG][ChatUIGroup] 创建群聊成功: " + message);
+            JOptionPane.showMessageDialog(parentFrame, message, "小组创建", JOptionPane.INFORMATION_MESSAGE);
+            // 自动刷新小组列表
+            if (lastSGListGroupName != null) {
+                client.sendMessage("/sg_list " + lastSGListGroupName);
+            }
+        } else if (message.startsWith("ERROR: 小组创建失败")) {
+            System.out.println("[DEBUG][ChatUIGroup] 小组创建失败: " + message);
+            JOptionPane.showMessageDialog(parentFrame, message, "小组创建失败", JOptionPane.ERROR_MESSAGE);
+        } else if (message.startsWith("[群聊]")) {
+            System.out.println("[DEBUG][ChatUIGroup] 收到群聊消息: " + message);
+            // 群聊消息分发到���应窗口
+            int idx1 = message.indexOf("] ");
+            int idx2 = message.indexOf("|", idx1 + 2);
+            int idx3 = message.indexOf(":", idx2 + 1);
+            if (idx1 != -1 && idx2 != -1 && idx3 != -1) {
+                String group = message.substring(idx1 + 2, idx2).trim();
+                String sender = message.substring(idx2 + 1, idx3).trim();
+                String msg = message.substring(idx3 + 1).trim();
+                GroupChatWindow win = groupChats.get(group);
+                if (win == null || !win.isDisplayable()) {
+                    win = new GroupChatWindow(group);
+                    groupChats.put(group, win);
+                }
+                win.appendMessage(sender + ": " + msg);
+            }
+        } else if (message.startsWith("FILE_NOTIFY:")) {
+            System.out.println("[DEBUG][ChatUIGroup] 收到文件通知: " + message);
+            // 文件通知分发到群聊窗口
+            String[] parts = message.split(":");
+            if (parts.length >= 7 && "group".equals(parts[6])) {
+                String fileId = parts[1];
+                String fileName = parts[2];
+                long fileSize = Long.parseLong(parts[3]);
+                String sender = parts[4];
+                String groupName = parts[5];
+                GroupChatWindow win = groupChats.get(groupName);
+                if (win == null || !win.isDisplayable()) {
+                    win = new GroupChatWindow(groupName);
+                    groupChats.put(groupName, win);
+                }
+                win.showFileReceiveDialog(fileId, fileName, fileSize, sender);
+            }
+        } else if (message.startsWith("IMAGE_NOTIFY:") && message.endsWith(":group")) {
+            System.out.println("[DEBUG][ChatUIGroup] 收到群聊图片通知: " + message);
+            // 群聊图片通知
+            String[] parts = message.split(":");
+            if (parts.length >= 6) {
+                String fileName = parts[1];
+                long fileSize = Long.parseLong(parts[2]);
+                String sender = parts[3];
+                String imagePath = parts[4];
+                // 解析群名
+                String groupName = null;
+                for (String g : myGroups) {
+                    if (imagePath.contains(g)) {
+                        groupName = g;
+                        break;
+                    }
+                }
+                if (groupName == null) groupName = "未知群聊";
+                GroupChatWindow win = groupChats.get(groupName);
+                if (win == null || !win.isDisplayable()) {
+                    win = new GroupChatWindow(groupName);
+                    groupChats.put(groupName, win);
+                }
+                win.showImageReceiveDialog(fileName, fileSize, sender, imagePath);
+            }
+        } else if (message.startsWith("SG_LIST:")) {
+            System.out.println("[DEBUG][ChatUIGroup] 收到SG_LIST消息: " + message);
+            // 小组列表信息格式：SG_LIST:小组ID|小组名|成员1,成员2;小组ID2|小组名2|成员1,...
+            String data = message.substring(8);
+            String groupNameKey = lastSGListGroupName;
+            // 修正：如果lastSGListGroupName为null，尝试从SG_LIST内容中解析群名
+            if (groupNameKey == null) {
+                // 尝试从data中解析群名（假设格式为：群��:小组ID|小组名|成员1,成员2;...）
+                int idx = data.indexOf(":");
+                if (idx > 0) {
+                    groupNameKey = data.substring(0, idx);
+                    data = data.substring(idx + 1);
+                }
+            }
+            System.out.println("[ChatUIGroup] lastSGListGroupName=" + groupNameKey);
+            if (groupNameKey != null) {
+                System.out.println("[ChatUIGroup] 更新小组列表: " + groupNameKey + ", " + data);
+                subGroupUI.onSubGroupListReceived(groupNameKey, data);
+            }
+        } else if (message.startsWith("[小组]")) {
+            System.out.println("[DEBUG][ChatUIGroup] 收到小组消息: " + message);
+            // 小组消息格式：[小组] 群名|小组名|发送者: 消消息内容
+            int idx1 = message.indexOf("] ");
+            int idx2 = message.indexOf("|", idx1 + 2);
+            int idx3 = message.indexOf("|", idx2 + 1);
+            int idx4 = message.indexOf(":", idx3 + 1);
+            if (idx1 != -1 && idx2 != -1 && idx3 != -1 && idx4 != -1) {
+                String groupName = message.substring(idx1 + 2, idx2).trim();
+                String subGroupName = message.substring(idx2 + 1, idx3).trim();
+                String sender = message.substring(idx3 + 1, idx4).trim();
+                String msg = message.substring(idx4 + 1).trim();
+                // 通过群聊名称和小组名查找窗口key
+                String key = null;
+                for (String g : myGroups) {
+                    if (g.equals(groupName)) {
+                        key = g + "#" + subGroupName;
+                        break;
+                    }
+                }
+                if (key == null) key = groupName + "#" + subGroupName;
+                SubGroupChatWindow win = subGroupChats.get(key);
+                if (win == null || !win.isDisplayable()) {
+                    win = new SubGroupChatWindow(groupName, subGroupName);
+                    subGroupChats.put(key, win);
+                }
+                win.appendMessage(sender + ": " + msg);
+            }
+        } else if (message.startsWith("SUCCESS: 小组创建成功")) {
+            System.out.println("[DEBUG][ChatUIGroup] 小组创建成功: " + message);
+            JOptionPane.showMessageDialog(parentFrame, message, "小组创建", JOptionPane.INFORMATION_MESSAGE);
+            // 自动刷新小组列表
+            if (lastSGListGroupName != null) {
+                client.sendMessage("/sg_list " + lastSGListGroupName);
+            }
+        } else if (message.startsWith("SUCCESS: 加入小组成功") || message.startsWith("SUCCESS: 退出小组成功") || message.startsWith("SUCCESS: 邀请成功")) {
+            System.out.println("[DEBUG][ChatUIGroup] 小组操作成功: " + message);
+            JOptionPane.showMessageDialog(parentFrame, message);
+            // 新增：成功加入/退出/邀请后刷新小组列表
+            if (lastSGListGroupName != null) {
+                client.sendMessage("/sg_list " + lastSGListGroupName);
+            }
+            // 加入/退出小组后，强制刷新群聊列表
+            client.sendMessage("/glist");
+        } else if (message.startsWith("ERROR:")) {
+            System.out.println("[DEBUG][ChatUIGroup] 错误消息: " + message);
+            JOptionPane.showMessageDialog(parentFrame, message, "错误", JOptionPane.ERROR_MESSAGE);
+        } else if (message.startsWith("SYSTEM: 你被邀请加入群")) {
+            System.out.println("[DEBUG][ChatUIGroup] 被邀请加入群: " + message);
+            JOptionPane.showMessageDialog(parentFrame, message, "小组邀请", JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+
+    // ���增：群聊窗口打开方法，供外部调用
+    public void openGroupChatWindow(String groupName) {
+        GroupChatWindow win = groupChats.get(groupName);
+        if (win == null || !win.isDisplayable()) {
+            win = new GroupChatWindow(groupName);
+            groupChats.put(groupName, win);
+        }
+        win.setTitle("群聊 - " + groupName);
+        win.setLocationRelativeTo(null);
+        win.setVisible(true);
+        win.toFront();
+        // 新增：打开群聊窗口时请求服务器最新群聊历史消息
+        client.sendMessage("/hg " + groupName);
+    }
+
+    // 新增：返回当前已打开的群聊窗口数
+    public int getOpenChatWindowCount() {
+        int openCount = 0;
+        for (GroupChatWindow win : groupChats.values()) {
+            if (win != null && win.isDisplayable()) openCount++;
+        }
+        for (SubGroupChatWindow win : subGroupChats.values()) {
+            if (win != null && win.isDisplayable()) openCount++;
+        }
+        return openCount;
+    }
+}

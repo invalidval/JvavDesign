@@ -264,6 +264,9 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
                     if (messageListPanel != null) messageListPanel.refresh();
                 }
             }
+        } else if (message.startsWith("SG_LIST:")) {
+            // 新增：小组列表信息分发到群聊UI
+            if (groupUI != null) groupUI.onMessageReceived(message);
         } else if (message.startsWith("SYSTEM:")) {
             int statusCodeStart = message.lastIndexOf("[");
             int statusCodeEnd = message.lastIndexOf("]");
@@ -330,6 +333,92 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
                 sessionIsGroup.put(sender, false);
                 if (messageListPanel != null) messageListPanel.refresh();
             }
+        } else if (message.startsWith("SYSTEM: 你被邀请加入群")) {
+            // 自动弹窗，解析群名和小组ID，并显示同意/拒绝按钮
+            String groupName = null, subGroupId = null, inviter = null;
+            try {
+                int idx1 = message.indexOf("群[");
+                int idx2 = message.indexOf("]的小组");
+                if (idx1 != -1 && idx2 != -1) {
+                    groupName = message.substring(idx1 + 2, idx2);
+                }
+                int idIdx = message.indexOf("ID=");
+                int idEnd = message.indexOf("，", idIdx);
+                if (idIdx != -1) {
+                    if (idEnd != -1) {
+                        subGroupId = message.substring(idIdx + 3, idEnd);
+                    } else {
+                        subGroupId = message.substring(idIdx + 3).replaceAll("[^a-zA-Z0-9\\-]", "");
+                    }
+                }
+                // 新增：解析邀请人
+                int inviterIdx = message.indexOf("邀请人:");
+                if (inviterIdx != -1) {
+                    int end = message.indexOf(" ", inviterIdx + 4);
+                    if (end == -1) end = message.length();
+                    inviter = message.substring(inviterIdx + 4, end).trim();
+                }
+            } catch (Exception ex) {}
+            // 构造带按钮的面板
+            JPanel panel = new JPanel(new BorderLayout());
+            StringBuilder msgBuilder = new StringBuilder(message);
+            if (inviter != null) {
+                msgBuilder.append("\n邀请人: ").append(inviter);
+            }
+            JLabel msgLabel = new JLabel("<html>" + msgBuilder.toString().replace("\n", "<br>") + "</html>");
+            panel.add(msgLabel, BorderLayout.CENTER);
+            JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+            JButton acceptBtn = new JButton("同意");
+            JButton rejectBtn = new JButton("拒绝");
+            btnPanel.add(acceptBtn);
+            btnPanel.add(rejectBtn);
+            panel.add(btnPanel, BorderLayout.SOUTH);
+            JDialog dialog = new JDialog(frame, "小组邀请", true);
+            dialog.setContentPane(panel);
+            dialog.setSize(400, 180);
+            dialog.setLocationRelativeTo(frame);
+            final String finalGroupName = groupName;
+            final String finalSubGroupId = subGroupId;
+            acceptBtn.addActionListener(e -> {
+                if (finalGroupName != null && finalSubGroupId != null) {
+                    client.sendMessage("/sg_accept " + finalGroupName + " " + finalSubGroupId);
+                }
+                dialog.dispose();
+            });
+            rejectBtn.addActionListener(e -> {
+                // 可扩展：发送拒绝命令到服务器
+                dialog.dispose();
+            });
+            dialog.setVisible(true);
+        } else if (message.startsWith("SG_INVITE_NOTIFY:")) {
+            // SG_INVITE_NOTIFY:群名:小组ID:邀请人
+            String[] parts = message.split(":");
+            if (parts.length >= 4) {
+                String groupName = parts[1];
+                String subGroupId = parts[2];
+                String inviter = parts[3];
+                JPanel panel = new JPanel(new BorderLayout());
+                JLabel msgLabel = new JLabel("<html>你被邀请加入群 <b>" + groupName + "</b> 的小组<br>小组ID: <b>" + subGroupId + "</b><br>邀请人: <b>" + inviter + "</b></html>");
+                panel.add(msgLabel, BorderLayout.CENTER);
+                JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+                JButton acceptBtn = new JButton("同意");
+                JButton rejectBtn = new JButton("拒绝");
+                btnPanel.add(acceptBtn);
+                btnPanel.add(rejectBtn);
+                panel.add(btnPanel, BorderLayout.SOUTH);
+                JDialog dialog = new JDialog(frame, "小组邀请", true);
+                dialog.setContentPane(panel);
+                dialog.setSize(400, 180);
+                dialog.setLocationRelativeTo(frame);
+                acceptBtn.addActionListener(e -> {
+                    client.sendMessage("/sg_accept " + groupName + " " + subGroupId);
+                    dialog.dispose();
+                });
+                rejectBtn.addActionListener(e -> {
+                    dialog.dispose();
+                });
+                dialog.setVisible(true);
+            }
         }
     }
 
@@ -384,7 +473,7 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
 
             // 登出按钮逻辑
             logoutBtn.addActionListener(e -> {
-                int confirm = JOptionPane.showConfirmDialog(frame, "确定要登出吗？", "登出确认", JOptionPane.YES_NO_OPTION);
+                int confirm = JOptionPane.showConfirmDialog(frame, "确定要登出吗��", "登出确认", JOptionPane.YES_NO_OPTION);
                 if (confirm == JOptionPane.YES_OPTION) {
                     doLogout(true);
                 }
@@ -424,7 +513,7 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
     public void start() {
         try {
             client = new Client(serverIp, serverPort);
-            client.addObserver(this); // 确保只注册一次
+            client.addObserver(this); // 确保��注册一次
             client.startListening();
         } catch (IOException e) {
             JOptionPane.showMessageDialog(frame, "无法连接到服务器：" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);

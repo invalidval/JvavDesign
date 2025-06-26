@@ -46,6 +46,15 @@ public class ClientHandler extends Thread implements UserObserver {
        // handlerStrategies.put("/VOICE", new VoiceChatHandler(new VoiceChatManager())); // 添加语音处理器注册
         // 新增：图片接收与转发处理
         handlerStrategies.put("/IMAGE", new ImageReceiveHandler());
+        handlerStrategies.put("/SG_CREATE", new SubGroupCreateHandler());
+        handlerStrategies.put("/SG_INVITE", new SubGroupInviteHandler());
+        handlerStrategies.put("/SG_JOIN", new SubGroupJoinHandler());
+        handlerStrategies.put("/SG_EXIT", new SubGroupExitHandler());
+        handlerStrategies.put("/SG_MSG", new SubGroupMsgHandler());
+        // 新增：小组列表查询命令
+        handlerStrategies.put("/SG_LIST", new SubGroupListHandler());
+        handlerStrategies.put("/SG_HISTORY", new SubGroupHistoryHandler());
+        handlerStrategies.put("/SG_ACCEPT", new SubGroupAcceptHandler()); // 新增小组邀请接受处理器
     }
 
     public void run() {
@@ -123,6 +132,38 @@ public class ClientHandler extends Thread implements UserObserver {
             String message;
 
             while ((username != null) && (message = in.readUTF()) != null) { // readUTF
+                // 新增：处理小组邀请通知的客户端响应
+                if (message.startsWith("/sg_invite_accept ")) {
+                    // /sg_invite_accept 群名 小组ID
+                    String[] parts = message.trim().split("\\s+");
+                    if (parts.length >= 3) {
+                        String groupName = parts[1];
+                        String subGroupId = parts[2];
+                        var group = com.chat.server.GroupDatabase.getGroup(groupName);
+                        if (group == null) {
+                            send("ERROR: 群聊不存在");
+                        } else {
+                            boolean ok = com.chat.NewFunctions.subgroup.SubGroupManager.acceptInviteToSubGroup(group, subGroupId, username);
+                            if (ok) {
+                                send("SUCCESS: 已加入小组");
+                                // 通知所有小组成员刷新小组列表
+                                for (var sg : group.getSubGroups()) {
+                                    for (String member : sg.getMembers()) {
+                                        ClientHandler ch = com.chat.server.Server.getClientHandler(member);
+                                        if (ch != null) {
+                                            ch.send("SG_LIST:" + com.chat.NewFunctions.subgroup.SubGroupManager.buildSubGroupListString(group));
+                                        }
+                                    }
+                                }
+                            } else {
+                                send("ERROR: 接受邀请失败（可能未被邀请或参数有误）");
+                            }
+                        }
+                    } else {
+                        send("ERROR: 格式为 /sg_invite_accept 群名 小组ID");
+                    }
+                    continue;
+                }
                 String command = message.startsWith("/") ? message.split("\\s+")[0].toUpperCase() : "DEFAULT";
                 MessageHandlerStrategy strategy = handlerStrategies.getOrDefault(command,
                         handlerStrategies.get("DEFAULT"));
@@ -159,7 +200,7 @@ public class ClientHandler extends Thread implements UserObserver {
 
     @Override
     public void onUserStatusChanged(User user) {
-        // 好友上线/下线时回调，发送状态更新
+        // 好友上线/下线时��调，发送状态更新
         send("STATUS:" + user.getName() + ":" + (user.isOnline() ? "online" : "offline"));
     }
 
@@ -318,12 +359,12 @@ public class ClientHandler extends Thread implements UserObserver {
                     }
                 }
             } else {
-                handler.send("ERROR: 群聊已存在或成员无效");
+                handler.send("ERROR: 群���������已存在或成员无效");
             }
         }
     }
 
-    // 获取自己所在群
+    // 获取自己群
     class GroupListHandler implements MessageHandlerStrategy {
         public void handle(String message, ClientHandler handler) {
             Set<String> groups = GroupDatabase.getGroupsOfUser(username);
@@ -390,7 +431,7 @@ public class ClientHandler extends Thread implements UserObserver {
                         handler.send("ERROR: 消息数量应在1-100之间");
                     }
                 } catch (NumberFormatException e) {
-                    // /h 用户名 - 查看与指定用户的私聊记录
+                    // /h 用户名 - 查看��指��用户的私聊记录
                     String targetUser = parts[1];
                     showPrivateMessages(handler, targetUser, 20);
                 }
@@ -411,7 +452,7 @@ public class ClientHandler extends Thread implements UserObserver {
                 handler.send("ERROR: 格式为 /h [用户名] [数量]");
                 handler.send("使用说明：");
                 handler.send("/h          - 查看最近20条消息");
-                handler.send("/h 数量     - 查看指定数��的消息");
+                handler.send("/h 数量     - 查看指��数��的消息");
                 handler.send("/h 用户名   - 查看与指定用户的私聊记录");
                 handler.send("/h 用户名 数量 - 查看与指定用户的指定数量私聊记录");
             }
@@ -424,7 +465,7 @@ public class ClientHandler extends Thread implements UserObserver {
                 return;
             }
 
-            handler.send("=== 最近 " + messages.size() + " 条消息������ ===");
+            handler.send("=== 最近 " + messages.size() + " ���消息������ ===");
             // 按时间正序显示（最早的在前）
             for (int i = messages.size() - 1; i >= 0; i--) {
                 handler.send(messages.get(i).toString());
@@ -503,7 +544,7 @@ public class ClientHandler extends Thread implements UserObserver {
                         handler.send("ERROR: 消息数量应在1-100之间");
                     }
                 } catch (NumberFormatException e) {
-                    // /hg 群名 成员名
+                    // /hg ��名 成员名
                     String member = parts[2];
                     showGroupMemberMessages(handler, groupName, member, 20);
                 }
@@ -527,7 +568,7 @@ public class ClientHandler extends Thread implements UserObserver {
                 handler.send("/hg 群名                - 查看该群最近20条消息");
                 handler.send("/hg 群名 数量           - 查看该群指定数量的消息");
                 handler.send("/hg 群名 成员名         - 查看该群指定成员��最近20条消息");
-                handler.send("/hg 群名 成员名 数量    - 查看该群指定成员的指定数量消息");
+                handler.send("/hg 群名 成员名 ���量    - 查看该群指定成员的指定数量消息");
             }
         }
 
@@ -569,7 +610,7 @@ public class ClientHandler extends Thread implements UserObserver {
                 long fileSize = Long.parseLong(parts[2]);
                 String targetUser = parts[3];
                 boolean isGroup = Boolean.parseBoolean(parts[4]);
-                String sender = parts.length > 5 ? parts[5] : handler.username; // 新增：支持独立socket传递sender
+                String sender = parts.length > 5 ? parts[5] : handler.username; // 新增：支持独��socket传递sender
 
                 // 创建目标目录
                 String basePath = isGroup ? "files/groups/" : "files/private/";
@@ -584,7 +625,7 @@ public class ClientHandler extends Thread implements UserObserver {
                     }
                 }
 
-                // 生成文���ID和保存路径
+                // 生成文件ID和保存路径
                 String fileId = UUID.randomUUID().toString();
                 String filePath = dirPath + "/" + fileName;
                 File file = new File(filePath);
@@ -623,14 +664,36 @@ public class ClientHandler extends Thread implements UserObserver {
                         fileId, fileName, fileSize, sender, targetUser, isGroup ? "group" : "private");
 
                 if (isGroup) {
-                    // 群文件，通知所有群成员
-                    Set<String> members = GroupDatabase.getGroupMembers(targetUser);
-                    if (members != null) {
-                        for (String member : members) {
-                            if (!member.equals(sender)) {
-                                ClientHandler memberHandler = Server.getClientHandler(member);
-                                if (memberHandler != null) {
-                                    memberHandler.send(notifyMsg);
+                    // 判断是否为小组（targetUser包含#）
+                    if (targetUser.contains("#")) {
+                        // 小组，targetUser格式为 群名#小组ID
+                        String[] groupParts = targetUser.split("#", 2);
+                        String groupName = groupParts[0];
+                        String subGroupId = groupParts[1];
+                        com.chat.model.Group group = com.chat.server.GroupDatabase.getGroup(groupName);
+                        if (group != null) {
+                            com.chat.NewFunctions.subgroup.SubGroup sg = group.getSubGroupById(subGroupId);
+                            if (sg != null) {
+                                for (String member : sg.getMembers()) {
+                                    if (!member.equals(sender)) {
+                                        ClientHandler memberHandler = com.chat.server.Server.getClientHandler(member);
+                                        if (memberHandler != null) {
+                                            memberHandler.send(notifyMsg);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // 群聊，通知所有群成员
+                        Set<String> members = GroupDatabase.getGroupMembers(targetUser);
+                        if (members != null) {
+                            for (String member : members) {
+                                if (!member.equals(sender)) {
+                                    ClientHandler memberHandler = Server.getClientHandler(member);
+                                    if (memberHandler != null) {
+                                        memberHandler.send(notifyMsg);
+                                    }
                                 }
                             }
                         }
@@ -656,7 +719,7 @@ public class ClientHandler extends Thread implements UserObserver {
         @Override
         public void handle(String message, ClientHandler handler) {
             System.out.println("接收到文件下载请求: " + message);
-            // 关键：使用handler持有的统一输出流，并确保线程安全
+            // 关键：使用handler持有的统一输出���，并确保���程安全
             DataOutputStream dos = handler.out;
             synchronized (dos) {
                 try {
@@ -703,7 +766,7 @@ public class ClientHandler extends Thread implements UserObserver {
                 } catch (IOException e) {
                     try {
                         // 异常也通过同一个流发送
-                        dos.writeUTF("ERROR:文件下载失败: " + e.getMessage());
+                        dos.writeUTF("ERROR:文件下���失败: " + e.getMessage());
                         dos.flush();
                     } catch (IOException ex) {
                         // ignore
@@ -793,7 +856,7 @@ public class ClientHandler extends Thread implements UserObserver {
                     sendGroupInvite(handler, target, sessionId);
                 }
             } catch (Exception e) {
-                handler.send("SYSTEM: 语音初始化失败: " + e.getMessage());
+                handler.send("SYSTEM: 语音初始��失败: " + e.getMessage());
             }
         }
         private void handleReject(ClientHandler handler, String[] parts) {
@@ -830,7 +893,7 @@ public class ClientHandler extends Thread implements UserObserver {
         }
 
         *//**
-         * 在SessionContext类中添加状态跟踪
+         * 在SessionContext类中添加状��跟踪
          *//*
         private static class SessionContext {
             final String sessionType;
@@ -986,7 +1049,7 @@ public class ClientHandler extends Thread implements UserObserver {
             voiceManager.stopSession(sessionId);
             activeSessions.remove(sessionId);
 
-            // 通知其他参与者
+            // 通知其他参��者
             SessionContext context = activeSessions.get(sessionId);
             if (context != null) {
                 notifyParticipants(sessionId, context, handler.username);
@@ -1084,7 +1147,7 @@ public class ClientHandler extends Thread implements UserObserver {
                     String[] parts = meta.trim().split(" ", 4);
                     if (parts.length < 4) {
                         System.err.println("[ImageSocket] 图片下载命令格式错误: " + meta);
-                        out.writeUTF("ERROR: 图片下载命令格式错误");
+                        out.writeUTF("ERROR: 图��下载命令格式错误");
                         return;
                     }
                     String fileName = parts[1];
@@ -1140,7 +1203,7 @@ public class ClientHandler extends Thread implements UserObserver {
                     remaining -= read;
                 }
                 fos.close();
-                System.out.println("[ImageSocket] 图片保存到: " + filePath);
+                System.out.println("[ImageSocket] 图片保��到: " + filePath);
                 if (isGroup) {
                     Set<String> members = com.chat.server.GroupDatabase.getGroupMembers(targetUser);
                     if (members != null) {
@@ -1171,4 +1234,248 @@ public class ClientHandler extends Thread implements UserObserver {
             }
         }
     }
+    // ================== 小组相关命令处理器 ==================
+    class SubGroupCreateHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            String[] parts = message.trim().split("\\s+");
+            if (parts.length < 3) {
+                handler.send("ERROR: 格式为 /sg_create 群名 小组名");
+                return;
+            }
+            String groupName = parts[1];
+            String subGroupName = parts[2];
+            var group = com.chat.server.GroupDatabase.getGroup(groupName);
+            if (group == null) {
+                handler.send("ERROR: 群聊不存在");
+                return;
+            }
+            // 检查创建人是否已在任何小组
+            if (com.chat.NewFunctions.subgroup.SubGroupManager.getUserSubGroup(group, username) != null) {
+                handler.send("ERROR: 你已在该群的某个小组，不能重复创建");
+                return;
+            }
+            // 创建小组，仅包含自己
+            java.util.Set<String> members = new java.util.HashSet<>();
+            members.add(username);
+            StringBuilder errorMsg = new StringBuilder();
+            com.chat.NewFunctions.subgroup.SubGroup sg = com.chat.NewFunctions.subgroup.SubGroupManager.createSubGroup(group, subGroupName, members, errorMsg);
+            if (sg == null) {
+                handler.send("ERROR: 小组创建失败 - " + errorMsg.toString());
+                return;
+            }
+            handler.send("SUCCESS: 小组创建成功，ID=" + sg.getId());
+            // 通知自己刷新小组列表
+            ClientHandler selfHandler = com.chat.server.Server.getClientHandler(username);
+            if (selfHandler != null) {
+                selfHandler.send("SG_LIST:" + com.chat.NewFunctions.subgroup.SubGroupManager.buildSubGroupListString(group));
+            }
+        }
+    }
+
+    static class SubGroupInviteHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            System.out.println("[DEBUG][SubGroupInviteHandler] 收到邀请命令: " + message);
+            String[] parts = message.trim().split("\\s+");
+            if (parts.length < 4) {
+                System.out.println("[DEBUG][SubGroupInviteHandler] 参数不足: " + Arrays.toString(parts));
+                handler.send("ERROR: 格式为 /sg_invite 群名 小组ID 用户名");
+                return;
+            }
+            String groupName = parts[1];
+            String subGroupId = parts[2];
+            String inviteUser = parts[3];
+            System.out.println("[DEBUG][SubGroupInviteHandler] groupName=" + groupName + ", subGroupId=" + subGroupId + ", inviteUser=" + inviteUser);
+            var group = com.chat.server.GroupDatabase.getGroup(groupName);
+            if (group == null) {
+                System.out.println("[DEBUG][SubGroupInviteHandler] 群聊不存在: " + groupName);
+                handler.send("ERROR: 群聊不存在");
+                return;
+            }
+            // 只能邀请本群成员
+            if (!group.getMemberNames().contains(inviteUser)) {
+                System.out.println("[DEBUG][SubGroupInviteHandler] 只能邀请本群成员: " + inviteUser);
+                handler.send("ERROR: 只能邀请本群成员");
+                return;
+            }
+            // 被邀请人不能已在任何小组
+            if (com.chat.NewFunctions.subgroup.SubGroupManager.getUserSubGroup(group, inviteUser) != null) {
+                System.out.println("[DEBUG][SubGroupInviteHandler] 用户已在本群其他小组: " + inviteUser);
+                handler.send("ERROR: 用户已在本群其他小组，不能被邀请");
+                return;
+            }
+            boolean ok = com.chat.NewFunctions.subgroup.SubGroupManager.inviteToSubGroup(group, subGroupId, inviteUser);
+            System.out.println("[DEBUG][SubGroupInviteHandler] inviteToSubGroup result: " + ok);
+            if (ok) {
+                handler.send("SUCCESS: 邀请成功");
+                // 通知被邀请用户
+                ClientHandler target = com.chat.server.Server.getClientHandler(inviteUser);
+                if (target != null) {
+                    System.out.println("[DEBUG][SubGroupInviteHandler] 通知被邀请用户: " + inviteUser);
+                    // 新增：发送专用小组邀请消息，带上群名、小组ID、邀请人
+                    target.send("SG_INVITE_NOTIFY:" + groupName + ":" + subGroupId + ":" + handler.username);
+                } else {
+                    System.out.println("[DEBUG][SubGroupInviteHandler] 被邀请用户不在线: " + inviteUser);
+                }
+            } else {
+                handler.send("ERROR: 邀请失败（用户已在其他小组或参数有误）");
+            }
+        }
+    }
+
+    // 新增：小组邀请接受命令处理器
+    class SubGroupAcceptHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            String[] parts = message.trim().split("\\s+");
+            if (parts.length < 3) {
+                handler.send("ERROR: 格式为 /sg_accept 群名 小组ID");
+                return;
+            }
+            String groupName = parts[1];
+            String subGroupId = parts[2];
+            var group = com.chat.server.GroupDatabase.getGroup(groupName);
+            if (group == null) {
+                handler.send("ERROR: 群聊不存在");
+                return;
+            }
+            boolean ok = com.chat.NewFunctions.subgroup.SubGroupManager.acceptInviteToSubGroup(group, subGroupId, handler.username);
+            if (ok) {
+                handler.send("SUCCESS: 已加入小组");
+                // 通知所有小组成员刷新小组列表
+                for (var sg : group.getSubGroups()) {
+                    for (String member : sg.getMembers()) {
+                        ClientHandler ch = com.chat.server.Server.getClientHandler(member);
+                        if (ch != null) {
+                            ch.send("SG_LIST:" + com.chat.NewFunctions.subgroup.SubGroupManager.buildSubGroupListString(group));
+                        }
+                    }
+                }
+            } else {
+                handler.send("ERROR: 接受邀请失败（可能未被邀请或参数有误）");
+            }
+        }
+    }
+    class SubGroupJoinHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            String[] parts = message.trim().split("\\s+");
+            if (parts.length < 3) {
+                handler.send("ERROR: 格式为 /sg_join 群 小组ID");
+                return;
+            }
+            String groupName = parts[1];
+            String subGroupId = parts[2];
+            var group = com.chat.server.GroupDatabase.getGroup(groupName);
+            if (group == null) {
+                handler.send("ERROR: 群聊不存在");
+                return;
+            }
+            // 自动退出原有小组，加入新小组
+            boolean ok = com.chat.NewFunctions.subgroup.SubGroupManager.joinSubGroup(group, subGroupId, username);
+            if (ok) {
+                handler.send("SUCCESS: 加入小组成功");
+            } else {
+                handler.send("ERROR: 加入小组失败（可能已在其他小组或参数有误）");
+            }
+        }
+    }
+    class SubGroupExitHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            String[] parts = message.trim().split("\\s+");
+            if (parts.length < 2) {
+                handler.send("ERROR: 格式为 /sg_exit 群名");
+                return;
+            }
+            String groupName = parts[1];
+            var group = com.chat.server.GroupDatabase.getGroup(groupName);
+            if (group == null) {
+                handler.send("ERROR: 群聊不存在");
+                return;
+            }
+            boolean ok = com.chat.NewFunctions.subgroup.SubGroupManager.exitSubGroup(group, username);
+            if (ok) {
+                handler.send("SUCCESS: 退出小组成功");
+            } else {
+                handler.send("ERROR: 退出小组失败（可能未加入任何小组）");
+            }
+        }
+    }
+    class SubGroupMsgHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            String[] parts = message.trim().split("\\s+", 4);
+            if (parts.length < 4) {
+                handler.send("ERROR: 格式为 /sg_msg 群名 小组ID 消息内容");
+                return;
+            }
+            String groupName = parts[1];
+            String subGroupId = parts[2];
+            String msg = parts[3];
+            var group = com.chat.server.GroupDatabase.getGroup(groupName);
+            if (group == null) {
+                handler.send("ERROR: 群聊不存在");
+                return;
+            }
+            var sg = group.getSubGroupById(subGroupId);
+            if (sg == null) {
+                handler.send("ERROR: 小组不存在");
+                return;
+            }
+            if (!sg.contains(username)) {
+                handler.send("ERROR: 你不在该小组中");
+                return;
+            }
+            // 存储小组消���
+            com.chat.server.MessageStorage.saveMessage(username, subGroupId, msg, com.chat.server.MessageStorage.MessageType.SUBGROUP, groupName, subGroupId);
+            // 只发给小组成员
+            for (String member : sg.getMembers()) {
+                com.chat.server.ClientHandler target = com.chat.server.Server.getClientHandler(member);
+                if (target != null) {
+                    target.send("[小组] " + groupName + "|" + sg.getName() + "|" + username + ": " + msg);
+                }
+            }
+            // handler.send("SUCCESS: 小组消息已发送"); // 不再单独回显，直接靠消息分发
+        }
+    }
+    // 新增：小组历史消息查询处理器
+    class SubGroupHistoryHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            String[] parts = message.trim().split("\\s+");
+            if (parts.length < 3) {
+                handler.send("ERROR: 格式为 /sg_history 群名 小组ID [数量]");
+                return;
+            }
+            String groupName = parts[1];
+            String subGroupId = parts[2];
+            int limit = 20;
+            if (parts.length >= 4) {
+                try { limit = Integer.parseInt(parts[3]); } catch (Exception ignore) {}
+            }
+            var msgs = com.chat.server.MessageStorage.getSubGroupMessages(groupName, subGroupId, limit);
+            if (msgs.isEmpty()) {
+                handler.send("=== 小组 " + groupName + " 的小组ID=" + subGroupId + " 暂无消息记录 ===");
+                return;
+            }
+            handler.send("=== 小组 " + groupName + " 的小组ID=" + subGroupId + " 的消息记录 (" + msgs.size() + " 条) ===");
+            for (var msg : msgs) {
+                handler.send(msg.getSender() + ": " + msg.getContent());
+            }
+        }
+    }
+    class SubGroupListHandler implements MessageHandlerStrategy {
+        @Override
+        public void handle(String message, ClientHandler handler) {
+            String[] parts = message.trim().split("\\s+");
+            if (parts.length < 2) {
+                handler.send("ERROR: 格式为 /sg_list 群名");
+                return;
+            }
+            String groupName = parts[1];
+            var group = com.chat.server.GroupDatabase.getGroup(groupName);
+            if (group == null) {
+                handler.send("ERROR: 群聊不存在");
+                return;
+            }
+            // 构建小组列表字符串
+            String sgList = com.chat.NewFunctions.subgroup.SubGroupManager.buildSubGroupListString(group);
+            handler.send("SG_LIST:" + sgList);
+        }
+    }    // ================== 小组相关命令处理器 END ==================
 }

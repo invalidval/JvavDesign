@@ -3,6 +3,31 @@
     <group name="111">
         <member>r</member>
         <member>s</member>
+        <subgroup id="341daeaa-ee46-4276-8687-34591194212a" name="1">
+            <sgmember>r</sgmember>
+            <sgmember>s</sgmember>
+        </subgroup>
+        <subgroup id="fd095fec-0b5d-40af-804b-6bec7e15f9fa" name="s"/>
+        <subgroup id="9a71c226-9f85-4a77-bf3c-f69c3f00c184" name="ss">
+            <sgmember>ss</sgmember>
+        </subgroup>
+    </group>
+    <group name="123">
+        <member>r</member>
+        <member>111</member>
+        <member>s</member>
+        <subgroup id="4691b1df-4415-4de4-b210-6e4583ce7c10" name="1234">
+            <sgmember>s</sgmember>
+        </subgroup>
+    </group>
+    <group name="1213">
+        <member>111</member>
+        <member>s</member>
+        <subgroup id="8063693f-a81a-4395-8607-094c3ba18c1d" name="111"/>
+        <subgroup id="85decb27-ef9b-4b87-97d0-c092a8660cde" name="1111">
+            <sgmember>111</sgmember>
+            <sgmember>1111</sgmember>
+        </subgroup>
     </group>
     <group name="testgroup">
         <member>64</member>

@@ -348,7 +348,10 @@
   <message id="2300" receiver="r" sender="s" timestamp="2025-06-23 16:59:05" type="PRIVATE">
     <content>ffffff</content>
   </message>
-  <message id="2300" receiver="r" sender="s" timestamp="2025-06-23 16:59:05" type="PRIVATE">
-    <content>ffffff</content>
+  <message id="2301" receiver="r" sender="s" timestamp="2025-06-24 15:08:33" type="PRIVATE">
+    <content>ffff</content>
+  </message>
+  <message id="2301" receiver="r" sender="s" timestamp="2025-06-24 15:08:33" type="PRIVATE">
+    <content>ffff</content>
   </message>
 </messages>

@@ -448,16 +448,26 @@ public class ChatUIFriends implements MessageObserver {
                 try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(file))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        if (line.startsWith("[图片] ")) {
-                            String[] parts = line.split(" ", 3);
-                            if (parts.length == 3) {
-                                String imgFileName = parts[1];
-                                String imgPath = parts[2];
-                                appendImageMessage(friendName, imgFileName, imgPath);
-                                continue;
+                        // 格式: [时间] 发送方: 消息内容
+                        int idx1 = line.indexOf("] ");
+                        int idx2 = line.indexOf(":", idx1 + 2);
+                        if (idx1 != -1 && idx2 != -1) {
+                            String time = line.substring(0, idx1 + 1); // [时间]
+                            String sender = line.substring(idx1 + 2, idx2).trim();
+                            String msg = line.substring(idx2 + 1).trim();
+                            if (msg.startsWith("[图片] ")) {
+                                String[] parts = msg.split(" ", 3);
+                                if (parts.length == 3) {
+                                    String imgFileName = parts[1];
+                                    String imgPath = parts[2];
+                                    appendImageMessage(sender, imgFileName, imgPath);
+                                    continue;
+                                }
                             }
+                            chatArea.getDocument().insertString(chatArea.getDocument().getLength(), time + " " + sender + ": " + msg + "\n", null);
+                        } else {
+                            chatArea.getDocument().insertString(chatArea.getDocument().getLength(), line + "\n", null);
                         }
-                        chatArea.getDocument().insertString(chatArea.getDocument().getLength(), line + "\n", null);
                     }
                 } catch (Exception e) {
                     // 忽略读取异常
@@ -499,10 +509,11 @@ public class ChatUIFriends implements MessageObserver {
 
         public void appendMessage(String msg) {
             try {
+                String time = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
                 javax.swing.text.Document doc = chatArea.getDocument();
-                doc.insertString(doc.getLength(), msg + "\n", null);
+                doc.insertString(doc.getLength(), "[" + time + "] " + msg + "\n", null);
                 // 同步写入本地聊天记录
-                saveMessageToLocal(msg);
+                saveMessageToLocal("[" + time + "] " + msg);
             } catch (javax.swing.text.BadLocationException e) {
                 e.printStackTrace();
             }

@@ -11,6 +11,7 @@
         <friend>64</friend>
     </user>
     <user name="111" password="111">
+        <friend>s</friend>
         <friend>1111</friend>
     </user>
     <user name="2" password="1"/>
@@ -22,6 +23,7 @@
         <friend>64</friend>
     </user>
     <user name="s" password="s">
+        <friend>111</friend>
         <friend>r</friend>
     </user>
     <user name="bob" password="securepass">
