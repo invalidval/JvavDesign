@@ -50,6 +50,11 @@ public class VoiceChatManager {
     private ObjectInputStream in;
     private Thread receiveThread;
 
+    // 新增：语音独立Socket参数
+    private String voiceHost;
+    private int voicePort;
+    private ServerSocket serverSocket; // 独立语音服务端
+
     public VoiceChatManager() {
         this.packetizer = new Packetizer();
         this.encoder = new AudioEncoder();
@@ -240,7 +245,37 @@ public class VoiceChatManager {
     }
 
     /**
-     * 通过Socket发送音频包
+     * 设置语音目标主机和端口（客户端模式）
+     */
+    public void setVoiceTarget(String host, int port) {
+        this.voiceHost = host;
+        this.voicePort = port;
+    }
+
+    /**
+     * 启动Socket服务端，监听端口（独立语音端口）
+     */
+    public void startVoiceServer(int port) throws IOException {
+        this.voicePort = port;
+        this.serverSocket = new ServerSocket(port);
+        // 独立线程监听语音连接
+        new Thread(() -> {
+            while (!serverSocket.isClosed()) {
+                try (Socket clientSocket = serverSocket.accept();
+                     ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream())) {
+                    String sessionId = (String) in.readObject();
+                    List<AudioPacket> packets = (List<AudioPacket>) in.readObject();
+                    receivePackets(sessionId, packets);
+                } catch (Exception e) {
+                    if (!serverSocket.isClosed())
+                        System.err.println("语音服务端接收失败: " + e.getMessage());
+                }
+            }
+        }, "VoiceServerThread").start();
+    }
+
+    /**
+     * 通过独立Socket发送音频包（每次短连接）
      */
     private void sendPacketsToNetwork(String sessionId, List<AudioPacket> packets) {
         // 示例：模拟网络发送
@@ -253,6 +288,17 @@ public class VoiceChatManager {
                 out.flush();
             } catch (IOException e) {
                 System.err.println("Socket发送失败: " + e.getMessage());
+            }
+        }
+        // 独立Socket短连接发送
+        if (voiceHost != null && voicePort > 0) {
+            try (Socket voiceSocket = new Socket(voiceHost, voicePort);
+                 ObjectOutputStream out = new ObjectOutputStream(voiceSocket.getOutputStream())) {
+                out.writeObject(sessionId);
+                out.writeObject(packets);
+                out.flush();
+            } catch (IOException e) {
+                System.err.println("独立Socket语音发送失败: " + e.getMessage());
             }
         }
     }
@@ -285,6 +331,12 @@ public class VoiceChatManager {
             if (in != null) in.close();
             if (out != null) out.close();
             if (socket != null) socket.close();
+        } catch (IOException e) {
+            // 忽略
+        }
+        // 新增：关闭独立语音服务端
+        try {
+            if (serverSocket != null) serverSocket.close();
         } catch (IOException e) {
             // 忽略
         }
