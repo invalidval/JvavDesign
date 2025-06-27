@@ -4,6 +4,8 @@ import javax.sound.sampled.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.io.*;
+import java.net.*;
 
 /**
  * 语音聊天管理器 - 增强版
@@ -41,6 +43,12 @@ public class VoiceChatManager {
     private static final int AUDIO_BUFFER_SIZE = 4096;
     private static final AudioFormat AUDIO_FORMAT = new AudioFormat(
             44100, 16, 2, true, false);
+
+    // Socket通信相关
+    private Socket socket;
+    private ObjectOutputStream out;
+    private ObjectInputStream in;
+    private Thread receiveThread;
 
     public VoiceChatManager() {
         this.packetizer = new Packetizer();
@@ -211,11 +219,75 @@ public class VoiceChatManager {
     }
 
     /**
-     * 网络发送方法（需根据实际网络框架实现）
+     * 启动Socket客户端，连接到目标主机
+     */
+    public void connectToPeer(String host, int port) throws IOException {
+        socket = new Socket(host, port);
+        out = new ObjectOutputStream(socket.getOutputStream());
+        in = new ObjectInputStream(socket.getInputStream());
+        startReceiveThread();
+    }
+
+    /**
+     * 启动Socket服务端，监听端口
+     */
+    public void startServer(int port) throws IOException {
+        ServerSocket serverSocket = new ServerSocket(port);
+        socket = serverSocket.accept();
+        out = new ObjectOutputStream(socket.getOutputStream());
+        in = new ObjectInputStream(socket.getInputStream());
+        startReceiveThread();
+    }
+
+    /**
+     * 通过Socket发送音频包
      */
     private void sendPacketsToNetwork(String sessionId, List<AudioPacket> packets) {
         // 示例：模拟网络发送
         System.out.println("[" + sessionId + "] 发送 " + packets.size() + " 个数据包");
+        // 新增：通过Socket发送
+        if (out != null) {
+            try {
+                out.writeObject(sessionId);
+                out.writeObject(packets);
+                out.flush();
+            } catch (IOException e) {
+                System.err.println("Socket发送失败: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 启动接收线程，监听Socket数据
+     */
+    private void startReceiveThread() {
+        receiveThread = new Thread(() -> {
+            try {
+                while (!socket.isClosed()) {
+                    String sessionId = (String) in.readObject();
+                    List<AudioPacket> packets = (List<AudioPacket>) in.readObject();
+                    receivePackets(sessionId, packets);
+                }
+            } catch (Exception e) {
+                System.err.println("Socket接收失败: " + e.getMessage());
+            }
+        });
+        receiveThread.setDaemon(true);
+        receiveThread.start();
+    }
+
+    /**
+     * 关闭Socket和相关资源
+     */
+    public void closeSocket() {
+        try {
+            if (receiveThread != null) receiveThread.interrupt();
+            if (in != null) in.close();
+            if (out != null) out.close();
+            if (socket != null) socket.close();
+        } catch (IOException e) {
+            // 忽略
+        }
     }
 
     /**
@@ -224,6 +296,7 @@ public class VoiceChatManager {
     public void shutdown() {
         isRunning.set(false);
         executorService.shutdown();
+        closeSocket(); // 新增：关闭Socket
 
         if (microphone != null) {
             microphone.close();

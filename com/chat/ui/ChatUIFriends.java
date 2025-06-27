@@ -7,6 +7,9 @@ import com.chat.file.FileTransferManager;
 import com.chat.file.FileRecord;
 import com.chat.file.FileHistoryXmlManager;
 
+import com.chat.NewFunctions.audio.VoiceChatManager;
+import javax.sound.sampled.LineUnavailableException;
+
 import javax.swing.*;
 import java.awt.*;
 import java.io.*;
@@ -26,6 +29,8 @@ public class ChatUIFriends implements MessageObserver {
     private java.util.List<String> currentFriends = new ArrayList<>();
     private ChatWindowLimitProvider limitProvider;
     private String serverHost; // 新增字段，保存服务器host
+    // 新增：语音管理器
+    private final VoiceChatManager voiceChatManager = new VoiceChatManager();
 
     public ChatUIFriends(Client client, JFrame parentFrame, String currentUser, ChatWindowLimitProvider limitProvider) {
         this.client = client;
@@ -340,6 +345,12 @@ public class ChatUIFriends implements MessageObserver {
         // 文件Tab集成FileListPanel
         private FileListPanel fileListPanel;
         private JButton sendImageButton;
+        // 新增：语音通话相关UI组件
+        private JButton voiceCallButton;
+        private JButton stopVoiceCallButton;
+        private boolean isVoiceCalling = false;
+        private String voiceSessionId;
+        private int defaultVoicePort = 19999; // 可自定义端口
 
         public PrivateChatWindow(String friendName) {
             super("与 " + friendName + " 私聊");
@@ -408,9 +419,26 @@ public class ChatUIFriends implements MessageObserver {
             sendImageButton.addActionListener(e -> sendImageAction());
             inputPanel.add(sendImageButton, BorderLayout.WEST);
 
+            // 新增：语音通话按钮
+            voiceCallButton = new JButton("语音通话");
+            stopVoiceCallButton = new JButton("挂断");
+            stopVoiceCallButton.setEnabled(false);
+
+            voiceCallButton.addActionListener(e -> startVoiceCall());
+            stopVoiceCallButton.addActionListener(e -> stopVoiceCall());
+
+            // ========== 修正底部按钮显示 ==========
+            // 创建底部面板，包含语音按钮和输入区
+            JPanel bottomPanel = new JPanel(new BorderLayout());
+            JPanel voicePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+            voicePanel.add(voiceCallButton);
+            voicePanel.add(stopVoiceCallButton);
+            bottomPanel.add(voicePanel, BorderLayout.NORTH);
+            bottomPanel.add(inputPanel, BorderLayout.CENTER);
+
             chatPanel.add(topPanel, BorderLayout.NORTH);
             chatPanel.add(scrollPane, BorderLayout.CENTER);
-            chatPanel.add(inputPanel, BorderLayout.SOUTH);
+            chatPanel.add(bottomPanel, BorderLayout.SOUTH); // 只添加一次底部面板
 
             tabbedPane.addTab("聊天", chatPanel);
             tabbedPane.addTab("文件", fileListPanel);
@@ -439,18 +467,19 @@ public class ChatUIFriends implements MessageObserver {
             buttonPanel.add(fileButton);
 
             // 修改inputPanel的添加方式
-            JPanel bottomPanel = new JPanel(new BorderLayout());
-            bottomPanel.add(buttonPanel, BorderLayout.NORTH);
-            bottomPanel.add(inputPanel, BorderLayout.CENTER);
+            JPanel bottomPanel2 = new JPanel(new BorderLayout());
+            bottomPanel2.add(buttonPanel, BorderLayout.NORTH);
+            bottomPanel2.add(inputPanel, BorderLayout.CENTER);
 
-            add(bottomPanel, BorderLayout.SOUTH);
+            add(bottomPanel2, BorderLayout.SOUTH);
 
-            // 关闭窗口时从privateChats移除
+            // 关闭窗口时自动挂断语音
             this.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
             this.addWindowListener(new java.awt.event.WindowAdapter() {
                 @Override
                 public void windowClosed(java.awt.event.WindowEvent e) {
                     privateChats.remove(friendName);
+                    stopVoiceCall();
                 }
             });
         }
@@ -722,6 +751,63 @@ public class ChatUIFriends implements MessageObserver {
                     }
                 }
             });
+        }
+
+        // 新增：启动语音通话
+        private void startVoiceCall() {
+            if (isVoiceCalling) return;
+            try {
+                // 初始化音频设备
+                voiceChatManager.initAudioDevices();
+                // 生成唯一会话ID
+                voiceSessionId = currentUser + "_to_" + friendName;
+                // 选择角色：客户端或服务端
+                String[] options = {"作为主叫（对方需先点被叫）", "作为被叫（先点，等待主叫连接）"};
+                int choice = JOptionPane.showOptionDialog(this, "请选择通话角色：", "语音通话",
+                        JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+                if (choice == 0) {
+                    // 主叫，作为客户端连接
+                    String host = JOptionPane.showInputDialog(this, "请输入对方IP（本机可填127.0.0.1）", "127.0.0.1");
+                    voiceChatManager.connectToPeer(host, defaultVoicePort);
+                } else if (choice == 1) {
+                    // 被叫，作为服务端等待
+                    JOptionPane.showMessageDialog(this, "请等待对方发起连接...", "提示", JOptionPane.INFORMATION_MESSAGE);
+                    new Thread(() -> {
+                        try {
+                            voiceChatManager.startServer(defaultVoicePort);
+                        } catch (Exception ex) {
+                            SwingUtilities.invokeLater(() -> appendMessage("[语音服务端启动失败] " + ex.getMessage()));
+                        }
+                    }).start();
+                } else {
+                    return;
+                }
+                // 启动语音会话
+                voiceChatManager.startSession(voiceSessionId);
+                appendMessage("[语音通话已开始]");
+                isVoiceCalling = true;
+                voiceCallButton.setEnabled(false);
+                stopVoiceCallButton.setEnabled(true);
+            } catch (LineUnavailableException ex) {
+                appendMessage("[语音设备初始化失败] " + ex.getMessage());
+            } catch (Exception ex) {
+                appendMessage("[语音通话启动失败] " + ex.getMessage());
+            }
+        }
+
+        // 新增：挂断语音通话
+        private void stopVoiceCall() {
+            if (!isVoiceCalling) return;
+            try {
+                voiceChatManager.stopSession(voiceSessionId);
+                voiceChatManager.closeSocket();
+                appendMessage("[语音通话已挂断]");
+            } catch (Exception ex) {
+                appendMessage("[挂断失败] " + ex.getMessage());
+            }
+            isVoiceCalling = false;
+            voiceCallButton.setEnabled(true);
+            stopVoiceCallButton.setEnabled(false);
         }
     }
 }

@@ -109,17 +109,41 @@ public class ChatUIGroup implements MessageObserver {
             System.out.println("[DEBUG] myGroups: " + myGroups);
             for (String group : myGroups) {
                 System.out.println("[DEBUG] show myGroup: " + group);
-                JPanel groupCard = new JPanel(new BorderLayout());
+                JPanel groupCard = new JPanel(new BorderLayout()) {
+                    Color hoverColor = new Color(220, 240, 255);
+                    Color normalColor = new Color(245, 250, 255);
+                    boolean hovered = false;
+                    {
+                        setBackground(normalColor);
+                        addMouseListener(new java.awt.event.MouseAdapter() {
+                            @Override
+                            public void mouseEntered(java.awt.event.MouseEvent e) {
+                                setBackground(hoverColor);
+                                hovered = true;
+                                repaint();
+                            }
+                            @Override
+                            public void mouseExited(java.awt.event.MouseEvent e) {
+                                setBackground(normalColor);
+                                hovered = false;
+                                repaint();
+                            }
+                            @Override
+                            public void mouseClicked(java.awt.event.MouseEvent e) {
+                                openGroupChatWindow(group);
+                            }
+                        });
+                    }
+                };
                 groupCard.setMaximumSize(new Dimension(600, 48));
                 groupCard.setPreferredSize(new Dimension(600, 48));
                 groupCard.setMinimumSize(new Dimension(600, 48));
                 groupCard.setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createLineBorder(new Color(180,180,180), 1, true),
                         BorderFactory.createEmptyBorder(6, 16, 6, 16)));
-                groupCard.setBackground(new Color(245, 250, 255));
                 groupCard.setAlignmentX(Component.LEFT_ALIGNMENT);
                 JLabel groupLabel = new JLabel(group);
-                groupLabel.setFont(new Font("微��雅黑", Font.PLAIN, 16));
+                groupLabel.setFont(new Font("微软雅黑", Font.PLAIN, 16));
                 JButton chatButton = new JButton("进入群聊");
                 chatButton.setFocusable(false);
                 chatButton.addActionListener(e -> openGroupChatWindow(group));
