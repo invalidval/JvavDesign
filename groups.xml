@@ -1,28 +1,29 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <groups>
     <group name="111">
-        <member>r</member>
         <member>s</member>
-        <subgroup id="341daeaa-ee46-4276-8687-34591194212a" name="1">
-            <sgmember>r</sgmember>
-            <sgmember>s</sgmember>
-        </subgroup>
+        <member>r</member>
+        <subgroup id="341daeaa-ee46-4276-8687-34591194212a" name="1"/>
         <subgroup id="fd095fec-0b5d-40af-804b-6bec7e15f9fa" name="s"/>
         <subgroup id="9a71c226-9f85-4a77-bf3c-f69c3f00c184" name="ss">
             <sgmember>ss</sgmember>
+            <sgmember>r</sgmember>
+            <sgmember>s</sgmember>
         </subgroup>
     </group>
     <group name="123">
-        <member>r</member>
-        <member>111</member>
         <member>s</member>
-        <subgroup id="4691b1df-4415-4de4-b210-6e4583ce7c10" name="1234">
+        <member>111</member>
+        <member>r</member>
+        <subgroup id="4691b1df-4415-4de4-b210-6e4583ce7c10" name="1234"/>
+        <subgroup id="8d439fde-ea38-4441-a48f-dfe4b156c464" name="dddd">
+            <sgmember>r</sgmember>
             <sgmember>s</sgmember>
         </subgroup>
     </group>
     <group name="1213">
-        <member>111</member>
         <member>s</member>
+        <member>111</member>
         <subgroup id="8063693f-a81a-4395-8607-094c3ba18c1d" name="111"/>
         <subgroup id="85decb27-ef9b-4b87-97d0-c092a8660cde" name="1111">
             <sgmember>111</sgmember>
@@ -30,12 +31,12 @@
         </subgroup>
     </group>
     <group name="testgroup">
-        <member>64</member>
-        <member>1</member>
         <member>3</member>
+        <member>1</member>
+        <member>64</member>
     </group>
     <group name="中央政治局">
-        <member>1</member>
         <member>3</member>
+        <member>1</member>
     </group>
 </groups>

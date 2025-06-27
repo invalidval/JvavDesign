@@ -259,6 +259,21 @@ public class ChatUIFriends implements MessageObserver {
                 }
                 win.appendImageMessage(sender, fileName, imagePath);
             }
+        } else if (message.startsWith("FILE_NOTIFY:")) {
+            // 文件通知消息处理
+            String[] parts = message.split(":");
+            if (parts.length >= 5) {
+                String fileId = parts[1];
+                String fileName = parts[2];
+                long fileSize = Long.parseLong(parts[3]);
+                String sender = parts[4];
+                PrivateChatWindow win = privateChats.get(sender);
+                if (win == null || !win.isDisplayable()) {
+                    win = new PrivateChatWindow(sender);
+                    privateChats.put(sender, win);
+                }
+                win.showFileReceiveDialog(fileId, fileName, fileSize, sender);
+            }
         } else if (message.startsWith("FRIENDS:")) {
             String[] friends = message.substring(8).split(",");
             java.util.List<String> friendList = Arrays.asList(friends);

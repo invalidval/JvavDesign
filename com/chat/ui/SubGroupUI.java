@@ -18,7 +18,7 @@ public class SubGroupUI {
     private String currentUser;
     private JPanel mainPanel;
     // 小组聊天窗口管理
-    private Map<String, SubGroupChatWindow> subGroupChats = new ConcurrentHashMap<>();
+    Map<String, SubGroupChatWindow> subGroupChats = new ConcurrentHashMap<>();
     // 小组信息缓存
     private Map<String, String> subGroupInfoCache = new HashMap<>();
     private Map<String, Map<String, Set<String>>> subGroupMemberMap = new HashMap<>();
@@ -342,6 +342,42 @@ public class SubGroupUI {
             }
         }
         // 可选：图片接收与显示、文件接收等功能可后续补充
+        // 新增：小组文件接收弹窗和下载功能
+        public void showFileReceiveDialog(String fileId, String fileName, long fileSize, String sender) {
+            appendMessage(sender + " 发送了文件: " + fileName);
+            int option = JOptionPane.showConfirmDialog(this,
+                    sender + " 发送了文件: " + fileName + "\n是否下载?",
+                    "收到小组文件",
+                    JOptionPane.YES_NO_OPTION);
+            if (option == JOptionPane.YES_OPTION) {
+                String docPath = System.getProperty("user.home") + File.separator + "Documents" + File.separator + "ChatFiles" + File.separator + currentUser + File.separator + groupName + "#" + subGroupId;
+                File groupDir = new File(docPath);
+                if (!groupDir.exists()) groupDir.mkdirs();
+                JFileChooser fileChooser = new JFileChooser(groupDir);
+                fileChooser.setSelectedFile(new File(groupDir, fileName));
+                if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                    String savePath = fileChooser.getSelectedFile().getPath();
+                    FileTransferManager.downloadFile(client.getSocket(), fileId, savePath,
+                            new com.chat.file.FileTransferListener() {
+                                @Override
+                                public void onProgress(int percentage) {
+                                }
+                                @Override
+                                public void onComplete(String filePath) {
+                                    appendMessage(sender + " 发送的文件已下载完成: " + fileName);
+                                    JOptionPane.showMessageDialog(SubGroupChatWindow.this, "文件下载完成!\n保存路径: " + filePath);
+                                }
+                                @Override
+                                public void onError(String error) {
+                                    JOptionPane.showMessageDialog(SubGroupChatWindow.this,
+                                            "下载失败: " + error,
+                                            "错误",
+                                            JOptionPane.ERROR_MESSAGE);
+                                }
+                            });
+                }
+            }
+        }
     }
 
     // 小组管理对话框
@@ -387,7 +423,7 @@ public class SubGroupUI {
                 }
                 cmd.append(" ").append(currentUser);
                 client.sendMessage(cmd.toString());
-                JOptionPane.showMessageDialog(dialog, "已发送创建小组请求，等待服务器响应。", "提示", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(dialog, "已发送创建小组请求���等待服务器响应。", "提示", JOptionPane.INFORMATION_MESSAGE);
             }
         });
         dialog.addWindowListener(new java.awt.event.WindowAdapter() {
@@ -462,13 +498,13 @@ public class SubGroupUI {
                     Set<String> members = sgMap.get(sgId);
                     String sgName = "";
                     String info = subGroupInfoCache.getOrDefault(groupName, "");
-                    for (String line : info.split("\n")) {
-                        if (line.contains("小组ID:" + sgId)) {
-                            int idx1 = line.indexOf("名称:");
-                            int idx2 = line.indexOf("成员:");
-                            if (idx1 != -1 && idx2 != -1) {
-                                sgName = line.substring(idx1 + 3, idx2).trim();
-                            }
+                    // 解析小组名称
+                    String[] groupArr = info.split(";");
+                    for (String g : groupArr) {
+                        String[] parts = g.split("\\|");
+                        if (parts.length >= 2 && parts[0].trim().equals(sgId)) {
+                            sgName = parts[1].trim();
+                            break;
                         }
                     }
                     JPanel card = new JPanel(new BorderLayout());
@@ -478,7 +514,7 @@ public class SubGroupUI {
                         BorderFactory.createLineBorder(new Color(120,180,255), 1, true),
                         BorderFactory.createEmptyBorder(4, 16, 4, 16)));
                     card.setBackground(new Color(235, 245, 255));
-                    JLabel label = new JLabel("ID:" + sgId + "  名称:" + sgName + "  成员:" + String.join(",", members));
+                    JLabel label = new JLabel("名称:" + sgName + "  成员:" + String.join(",", members));
                     label.setFont(new Font("微软雅黑", Font.PLAIN, 14));
                     JButton chatBtn = new JButton("进入聊天");
                     chatBtn.setFocusable(false);
@@ -525,13 +561,12 @@ public class SubGroupUI {
                     Set<String> members = sgMap.get(sgId);
                     String sgName = "";
                     String info = subGroupInfoCache.getOrDefault(groupName, "");
-                    for (String line : info.split("\n")) {
-                        if (line.contains("小组ID:" + sgId)) {
-                            int idx1 = line.indexOf("名称:");
-                            int idx2 = line.indexOf("成员:");
-                            if (idx1 != -1 && idx2 != -1) {
-                                sgName = line.substring(idx1 + 3, idx2).trim();
-                            }
+                    String[] groupArr = info.split(";");
+                    for (String g : groupArr) {
+                        String[] parts = g.split("\\|");
+                        if (parts.length >= 2 && parts[0].trim().equals(sgId)) {
+                            sgName = parts[1].trim();
+                            break;
                         }
                     }
                     JPanel card = new JPanel(new BorderLayout());
@@ -541,7 +576,7 @@ public class SubGroupUI {
                         BorderFactory.createLineBorder(new Color(220,220,220), 1, true),
                         BorderFactory.createEmptyBorder(4, 16, 4, 16)));
                     card.setBackground(new Color(255, 252, 240));
-                    JLabel label = new JLabel("ID:" + sgId + "  名称:" + sgName + "  成员:" + String.join(",", members));
+                    JLabel label = new JLabel("名称:" + sgName + "  成员:" + String.join(",", members));
                     label.setFont(new Font("微软雅黑", Font.PLAIN, 13));
                     JButton joinBtn = new JButton("加入小组");
                     joinBtn.setFocusable(false);

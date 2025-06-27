@@ -294,8 +294,9 @@ public class ChatUIGroup implements MessageObserver {
                 if (com.chat.NewFunctions.image.ImageManager.isImageFile(file)) {
                     try {
                         int imagePort = 18989;
+                        // 修正：targetUser 只为 groupName
                         com.chat.NewFunctions.image.ImageManager.sendImageToServer(
-                                client.getHost(), imagePort, file, groupName + "#" + subGroupId, currentUser + ":group");
+                                client.getHost(), imagePort, file, groupName, currentUser + ":group");
                         appendMessage("[图片已发送: " + file.getName() + "]");
                     } catch (Exception ex) {
                         appendMessage("[图片发送失败: " + file.getName() + "]");
@@ -362,7 +363,10 @@ public class ChatUIGroup implements MessageObserver {
         private String groupName;
         private JTabbedPane tabbedPane;
         private JPanel chatPanel;
-        private FileListPanel fileListPanel; // 替��原有的文件表格
+        private FileListPanel fileListPanel; // 替换原有的文件表格
+        // 新增：图片消息offset映射（offset -> imagePath）
+        private final Map<Integer, String> imageOffsetMap = new HashMap<>();
+        private boolean imageMouseListenerAdded = false;
 
         public GroupChatWindow(String groupName) {
             super("群聊 - " + groupName);
@@ -394,7 +398,28 @@ public class ChatUIGroup implements MessageObserver {
 
             // 新增群聊图片发送按钮
             JButton sendImageButton = new JButton("发送图片");
-            sendImageButton.addActionListener(e -> sendImageAction());
+            sendImageButton.addActionListener(e -> {
+                JFileChooser fileChooser = new JFileChooser();
+                fileChooser.setDialogTitle("选择要发送的图片");
+                int result = fileChooser.showOpenDialog(this);
+                if (result == JFileChooser.APPROVE_OPTION) {
+                    File file = fileChooser.getSelectedFile();
+                    if (com.chat.NewFunctions.image.ImageManager.isImageFile(file)) {
+                        try {
+                            int imagePort = 18989;
+                            com.chat.NewFunctions.image.ImageManager.sendImageToServer(
+                                    client.getHost(), imagePort, file, groupName, currentUser + ":group");
+                            appendImageMessage(currentUser, file.getName(), file.getAbsolutePath());
+                            saveGroupMessageToLocal(currentUser, "[图片] " + file.getName() + " " + file.getAbsolutePath());
+                        } catch (Exception ex) {
+                            appendMessage("[图片发送失败: " + file.getName() + "]");
+                            JOptionPane.showMessageDialog(this, "图片发送失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                        }
+                    } else {
+                        JOptionPane.showMessageDialog(this, "请选择图片文件（jpg/png/gif/bmp）", "提示", JOptionPane.WARNING_MESSAGE);
+                    }
+                }
+            });
             inputPanel.add(sendImageButton, BorderLayout.WEST);
 
             chatPanel.add(scrollPane, BorderLayout.CENTER);
@@ -405,7 +430,7 @@ public class ChatUIGroup implements MessageObserver {
             add(tabbedPane, BorderLayout.CENTER);
 
             // 可扩展：显示群成员列表
-            //新增文件���传功能
+            //新增文件上传功能
             JButton fileButton = new JButton("发送文件");
             fileButton.addActionListener(e -> {
                 JFileChooser fileChooser = new JFileChooser();
@@ -461,7 +486,7 @@ public class ChatUIGroup implements MessageObserver {
                 client.sendMessage("/gs " + groupName + " " + message);
                 // 立即本地显示消息，保证体验一致
                 appendMessage("我: " + message);
-                saveGroupMessageToLocal(groupName,currentUser, message);
+                saveGroupMessageToLocal(currentUser, message);
                 inputField.setText("");
             }
         }
@@ -476,140 +501,18 @@ public class ChatUIGroup implements MessageObserver {
             }
         }
 
-        // 新增：群聊图片发送动作
-        private void sendImageAction() {
-            JFileChooser fileChooser = new JFileChooser();
-            fileChooser.setDialogTitle("选择��发送��图片");
-            int result = fileChooser.showOpenDialog(this);
-            if (result == JFileChooser.APPROVE_OPTION) {
-                File file = fileChooser.getSelectedFile();
-                if (com.chat.NewFunctions.image.ImageManager.isImageFile(file)) {
-                    try {
-                        int imagePort = 18989; // 群聊图片端口
-                        com.chat.NewFunctions.image.ImageManager.sendImageToServer(
-                                client.getHost(), imagePort, file, groupName, currentUser + ":group");
-                        try {
-                            javax.swing.text.Document doc = chatArea.getDocument();
-                            doc.insertString(doc.getLength(), "[图片已发送: " + file.getName() + "]\n", null);
-                        } catch (javax.swing.text.BadLocationException e) {
-                            e.printStackTrace();
-                        }
-                    } catch (Exception ex) {
-                        try {
-                            javax.swing.text.Document doc = chatArea.getDocument();
-                            doc.insertString(doc.getLength(), "[图片发送失败: " + file.getName() + "]\n", null);
-                        } catch (javax.swing.text.BadLocationException e) {
-                            e.printStackTrace();
-                        }
-                        JOptionPane.showMessageDialog(this, "图片发送失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
-                    }
-                } else {
-                    JOptionPane.showMessageDialog(this, "请选择图片文件（jpg/png/gif/bmp）", "提示", JOptionPane.WARNING_MESSAGE);
-                }
-            }
-        }
-
-        // 新增：群聊图片接��与查看
-        public void showImageReceiveDialog(String fileName, long fileSize, String sender, String imagePath) {
-            // 直接插入图片缩略图，不弹窗，仿微信��格
-            appendImageMessage(sender, fileName, imagePath);
-        }
-
-        // 群聊文件接收与下载弹窗
-        public void showFileReceiveDialog(String fileId, String fileName, long fileSize, String sender) {
-            appendMessage(sender + " 发送了文件: " + fileName);
-            int option = JOptionPane.showConfirmDialog(this,
-                    sender + " 发送了文件: " + fileName + "\n是否下载?",
-                    "收到群文件",
-                    JOptionPane.YES_NO_OPTION);
-            if (option == JOptionPane.YES_OPTION) {
-                String docPath = System.getProperty("user.home") + File.separator + "Documents" + File.separator + "ChatFiles" + File.separator + currentUser;
-                File userDir = new File(docPath);
-                if (!userDir.exists()) userDir.mkdirs();
-                JFileChooser fileChooser = new JFileChooser(userDir);
-                fileChooser.setSelectedFile(new File(userDir, fileName));
-                if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-                    String savePath = fileChooser.getSelectedFile().getPath();
-                    FileTransferManager.downloadFile(client.getSocket(), fileId, savePath,
-                            new FileTransferListener() {
-                                @Override
-                                public void onProgress(int percentage) {}
-                                @Override
-                                public void onComplete(String filePath) {
-                                    appendMessage(sender + " 发送的文件已下载完成: " + fileName);
-                                    JOptionPane.showMessageDialog(GroupChatWindow.this, "文件下载完成!\n保存路径: " + filePath);
-                                }
-                                @Override
-                                public void onError(String error) {
-                                    JOptionPane.showMessageDialog(GroupChatWindow.this,
-                                            "下载失败: " + error,
-                                            "错误",
-                                            JOptionPane.ERROR_MESSAGE);
-                                }
-                            });
-                }
-            }
-        }
-
-        // 聊天窗��插入图片消息（自动加载并显示图片缩略图，���点击查看大图）
-        private final Map<Integer, String> imageOffsetMap = new HashMap<>(); // offset -> imagePath
-        private boolean imageMouseListenerAdded = false;
+        // 新增：群聊图片消息插入与点击大图预览
         public void appendImageMessage(String sender, String fileName, String imagePath) {
-            String tempDir = System.getProperty("java.io.tmpdir");
-            String localPath = tempDir + File.separator + fileName;
-            new Thread(() -> {
-                try {
-                    File imageFile = new File(imagePath);
-                    if (imageFile.exists()) {
-                        displayImage(sender, fileName, imagePath);
-                    } else {
-                        String realSender = sender;
-                        if (realSender.endsWith(":group")) {
-                            realSender = realSender.substring(0, realSender.length() - 6);
-                        }
-                        try (java.net.Socket sock = new java.net.Socket(client.getHost(), 18989);
-                             java.io.DataOutputStream out = new java.io.DataOutputStream(sock.getOutputStream());
-                             java.io.DataInputStream in = new java.io.DataInputStream(sock.getInputStream())) {
-                            String cmd = "/IMAGE_DOWNLOAD " + fileName + " " + realSender + " " + currentUser;
-                            out.writeUTF(cmd);
-                            out.flush();
-                            String resp = in.readUTF();
-                            if (!"IMAGE_DATA".equals(resp)) {
-                                SwingUtilities.invokeLater(() -> appendMessage("[图片下载失��: " + resp + "]"));
-                                return;
-                            }
-                            String recvFileName = in.readUTF();
-                            long recvFileSize = in.readLong();
-                            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(localPath)) {
-                                byte[] buffer = new byte[8192];
-                                long remain = recvFileSize;
-                                while (remain > 0) {
-                                    int read = in.read(buffer, 0, (int)Math.min(buffer.length, remain));
-                                    if (read == -1) break;
-                                    fos.write(buffer, 0, read);
-                                    remain -= read;
-                                }
-                            }
-                            displayImage(sender, fileName, localPath);
-                        }
-                    }
-                } catch (Exception ex) {
-                    SwingUtilities.invokeLater(() -> appendMessage("[图片加载失败: " + ex.getMessage() + "]"));
-                }
-            }).start();
-        }
-
-        private void displayImage(String sender, String fileName, String imagePath) {
             SwingUtilities.invokeLater(() -> {
                 try {
+                    String time = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
                     javax.swing.text.StyledDocument doc = chatArea.getStyledDocument();
-                    doc.insertString(doc.getLength(), sender + " 发送了图片: ", null);
+                    doc.insertString(doc.getLength(), "[" + time + "] " + sender + " 发送了图片: ", null);
                     ImageIcon icon = new ImageIcon(imagePath);
                     if (icon.getIconWidth() <= 0 || icon.getIconHeight() <= 0) {
                         doc.insertString(doc.getLength(), "[图片加载失败]\n", null);
                         return;
                     }
-                    // 动态缩略图最大边长，取chatArea宽度的1/3，最小100，最大300
                     int chatWidth = chatArea.getWidth() > 0 ? chatArea.getWidth() : 300;
                     int maxThumb = Math.max(100, Math.min(300, chatWidth / 3));
                     int width = icon.getIconWidth();
@@ -628,29 +531,23 @@ public class ChatUIGroup implements MessageObserver {
                     javax.swing.text.StyleConstants.setIcon(style, thumbIcon);
                     int insertPos = doc.getLength();
                     doc.insertString(insertPos, "ignored", style);
-                    // 记���图片offset和路径
                     imageOffsetMap.put(insertPos, imagePath);
                     doc.insertString(doc.getLength(), "\n", null);
                     chatArea.setCaretPosition(doc.getLength());
-                    // 只添加一次MouseListener
                     if (!imageMouseListenerAdded) {
                         chatArea.addMouseListener(new java.awt.event.MouseAdapter() {
                             public void mouseClicked(java.awt.event.MouseEvent evt) {
                                 int pos = chatArea.viewToModel2D(evt.getPoint());
-                                // 查找最近的图片offset
                                 for (Map.Entry<Integer, String> entry : imageOffsetMap.entrySet()) {
                                     int offset = entry.getKey();
                                     if (pos == offset) {
                                         String imgPath = entry.getValue();
-                                        // 新的自适应弹窗
                                         JDialog dialog = new JDialog(GroupChatWindow.this, "图片预览", true);
                                         JLabel bigLabel = new JLabel();
                                         JScrollPane pane = new JScrollPane(bigLabel);
                                         dialog.setContentPane(pane);
-                                        // 初始尺寸
                                         dialog.setSize(600, 600);
                                         dialog.setLocationRelativeTo(GroupChatWindow.this);
-                                        // 动态缩放图片方法
                                         Runnable updateImage = () -> {
                                             int w = pane.getViewport().getWidth();
                                             int h = pane.getViewport().getHeight();
@@ -667,7 +564,6 @@ public class ChatUIGroup implements MessageObserver {
                                             Image scaled = bigIcon.getImage().getScaledInstance(showW, showH, Image.SCALE_SMOOTH);
                                             bigLabel.setIcon(new ImageIcon(scaled));
                                         };
-                                        // 监听弹窗和滚动面板尺寸变化
                                         pane.addComponentListener(new java.awt.event.ComponentAdapter() {
                                             public void componentResized(java.awt.event.ComponentEvent e) {
                                                 updateImage.run();
@@ -678,7 +574,6 @@ public class ChatUIGroup implements MessageObserver {
                                                 updateImage.run();
                                             }
                                         });
-                                        // 示
                                         updateImage.run();
                                         dialog.setVisible(true);
                                         break;
@@ -699,7 +594,7 @@ public class ChatUIGroup implements MessageObserver {
             });
         }
 
-        // 加载本地群聊聊天记录
+        // 加载本地群聊聊天记录，遇到图片消息自动加载缩略图
         private void loadLocalGroupChatHistory() {
             String fileName = "chat_group_" + groupName + ".txt";
             File file = new File(System.getProperty("user.home") + File.separator + "ChatLocalHistory", fileName);
@@ -707,11 +602,10 @@ public class ChatUIGroup implements MessageObserver {
                 try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(file))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        // 格式: [时间] 发送方: 消息内容
                         int idx1 = line.indexOf("] ");
                         int idx2 = line.indexOf(":", idx1 + 2);
                         if (idx1 != -1 && idx2 != -1) {
-                            String time = line.substring(0, idx1 + 1); // [时间]
+                            String time = line.substring(0, idx1 + 1);
                             String sender = line.substring(idx1 + 2, idx2).trim();
                             String msg = line.substring(idx2 + 1).trim();
                             if (msg.startsWith("[图片] ")) {
@@ -730,6 +624,59 @@ public class ChatUIGroup implements MessageObserver {
                     }
                 } catch (Exception e) {
                     // 忽略读取异常
+                }
+            }
+        }
+
+        // 保存群聊消息到本地文件，带时间戳和发送方ID，图片消息用[图片] 文件名 路径格式
+        private void saveGroupMessageToLocal(String sender, String message) {
+            String dirPath = System.getProperty("user.home") + File.separator + "ChatLocalHistory";
+            File dir = new File(dirPath);
+            if (!dir.exists()) dir.mkdirs();
+            String fileName = "chat_group_" + groupName + ".txt";
+            File file = new File(dir, fileName);
+            String time = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
+            String line = String.format("[%s] %s: %s", time, sender, message);
+            try (java.io.FileWriter fw = new java.io.FileWriter(file, true)) {
+                fw.write(line + "\n");
+            } catch (Exception e) {
+                // 忽略写入异常
+            }
+        }
+
+        // 新增：群文件接收弹窗和下载功能
+        public void showFileReceiveDialog(String fileId, String fileName, long fileSize, String sender) {
+            appendMessage(sender + " 发送了文件: " + fileName);
+            int option = JOptionPane.showConfirmDialog(this,
+                    sender + " 发送了文件: " + fileName + "\n是否下载?",
+                    "收到群文件",
+                    JOptionPane.YES_NO_OPTION);
+            if (option == JOptionPane.YES_OPTION) {
+                String docPath = System.getProperty("user.home") + File.separator + "Documents" + File.separator + "ChatFiles" + File.separator + currentUser + File.separator + groupName;
+                File groupDir = new File(docPath);
+                if (!groupDir.exists()) groupDir.mkdirs();
+                JFileChooser fileChooser = new JFileChooser(groupDir);
+                fileChooser.setSelectedFile(new File(groupDir, fileName));
+                if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                    String savePath = fileChooser.getSelectedFile().getPath();
+                    FileTransferManager.downloadFile(client.getSocket(), fileId, savePath,
+                            new FileTransferListener() {
+                                @Override
+                                public void onProgress(int percentage) {
+                                }
+                                @Override
+                                public void onComplete(String filePath) {
+                                    appendMessage(sender + " 发送的文件已下载完成: " + fileName);
+                                    JOptionPane.showMessageDialog(GroupChatWindow.this, "文件下载完成!\n保存路径: " + filePath);
+                                }
+                                @Override
+                                public void onError(String error) {
+                                    JOptionPane.showMessageDialog(GroupChatWindow.this,
+                                            "下载失败: " + error,
+                                            "错误",
+                                            JOptionPane.ERROR_MESSAGE);
+                                }
+                            });
                 }
             }
         }
@@ -866,7 +813,7 @@ public class ChatUIGroup implements MessageObserver {
             }
         } else if (message.startsWith("FILE_NOTIFY:")) {
             System.out.println("[DEBUG][ChatUIGroup] 收到文件通知: " + message);
-            // 文件通知分发到群聊窗口
+            // 文件通知分发到群聊或小组窗口
             String[] parts = message.split(":");
             if (parts.length >= 7 && "group".equals(parts[6])) {
                 String fileId = parts[1];
@@ -879,6 +826,25 @@ public class ChatUIGroup implements MessageObserver {
                     win = new GroupChatWindow(groupName);
                     groupChats.put(groupName, win);
                 }
+                win.setVisible(true);
+                win.toFront();
+                win.showFileReceiveDialog(fileId, fileName, fileSize, sender);
+            } else if (parts.length >= 8 && "subgroup".equals(parts[7])) {
+                // 小组文件通知格式: FILE_NOTIFY:fileId:fileName:fileSize:sender:groupName:subGroupId:subgroup
+                String fileId = parts[1];
+                String fileName = parts[2];
+                long fileSize = Long.parseLong(parts[3]);
+                String sender = parts[4];
+                String groupName = parts[5];
+                String subGroupId = parts[6];
+                String key = groupName + "#" + subGroupId;
+                SubGroupUI.SubGroupChatWindow win = subGroupUI.subGroupChats.get(key);
+                if (win == null || !win.isDisplayable()) {
+                    win = subGroupUI.new SubGroupChatWindow(groupName, subGroupId);
+                    subGroupUI.subGroupChats.put(key, win);
+                }
+                win.setVisible(true);
+                win.toFront();
                 win.showFileReceiveDialog(fileId, fileName, fileSize, sender);
             }
         } else if (message.startsWith("IMAGE_NOTIFY:") && message.endsWith(":group")) {
@@ -890,12 +856,14 @@ public class ChatUIGroup implements MessageObserver {
                 long fileSize = Long.parseLong(parts[2]);
                 String sender = parts[3];
                 String imagePath = parts[4];
-                // 解析群名
+                // 优化群名解析：优先从 imagePath 提取
                 String groupName = null;
                 for (String g : myGroups) {
-                    if (imagePath.contains(g)) {
+                    if (imagePath.contains("group_" + g + "#") || imagePath.contains("group_" + g + "/") || imagePath.contains("group_" + g + ".")) {
                         groupName = g;
                         break;
+                    } else if (imagePath.contains("group_" + g)) {
+                        groupName = g;
                     }
                 }
                 if (groupName == null) groupName = "未知群聊";
@@ -904,7 +872,10 @@ public class ChatUIGroup implements MessageObserver {
                     win = new GroupChatWindow(groupName);
                     groupChats.put(groupName, win);
                 }
-                win.showImageReceiveDialog(fileName, fileSize, sender, imagePath);
+                win.setVisible(true);
+                win.toFront();
+                win.appendImageMessage(sender, fileName, imagePath);
+                win.saveGroupMessageToLocal(sender, "[图片] " + fileName + " " + imagePath);
             }
         } else if (message.startsWith("SG_LIST:")) {
             System.out.println("[DEBUG][ChatUIGroup] 收到SG_LIST消息: " + message);
