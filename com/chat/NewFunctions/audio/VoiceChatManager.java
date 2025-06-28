@@ -351,7 +351,9 @@ public class VoiceChatManager {
         closeSocket(); // 新增：关闭Socket
 
         if (microphone != null) {
+            microphone.stop();
             microphone.close();
+            microphone = null;
         }
         if (speaker != null) {
             speaker.close();
