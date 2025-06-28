@@ -15,6 +15,8 @@ public class AudioTestRunner {
     private static final int TEST_DATA_SIZE = 4096;
 
     public static void main(String[] args) throws Exception {
+        System.setProperty("ffmpeg.location", "G:\\Delta Force\\launcher\\icreate\\recorder-release\\ffmpeg.exe");
+
         System.out.println("=== 开始语音聊天功能测试 ===");
 
         // 测试1：音频编码解码功能测试

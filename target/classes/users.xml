@@ -8,7 +8,6 @@
     <user name="testuser" password="testpass"/>
     <user name="1" password="1">
         <friend>3</friend>
-        <friend>64</friend>
     </user>
     <user name="111" password="111">
         <friend>s</friend>
@@ -34,7 +33,6 @@
     </user>
     <user name="·" password="`"/>
     <user name="64" password="64">
-        <friend>1</friend>
         <friend>3</friend>
     </user>
     <user name="charlie" password="mypassword">

@@ -5,7 +5,7 @@ package com.chat.NewFunctions.audio;
  * 音频数据包实体类
  * 位置：与AudioEncoder、Packetizer同包（NewFunctions.audio）
  */
-public class AudioPacket {
+public class AudioPacket implements java.io.Serializable {
     private final int sequence;      // 包序列号（用于排序）
     private final byte[] data;       // 音频数据内容
     private final long timestamp;    // 时间戳（毫秒）
