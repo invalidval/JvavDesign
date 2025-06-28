@@ -763,7 +763,7 @@ public class ClientHandler extends Thread implements UserObserver {
                         System.out.println("服务端上传完成: " + fileInfo.getName());
                     }
 
-                    // === 关键：此处不要再用 handler.send()/out.println() 发送任何内容 ===
+                    // === 关键：此处不要再�� handler.send()/out.println() 发送任何内容 ===
 
                 } catch (IOException e) {
                     try {
@@ -901,7 +901,7 @@ public class ClientHandler extends Thread implements UserObserver {
             final String sessionType;
             final String initiator;
             final String target;
-            VoiceChatManager.SessionState state; // 使用VoiceChatManager中的枚举
+            VoiceChatManager.SessionState state; // 使用VoiceChatManager中���枚举
 
             SessionContext(String sessionType, String initiator, String target) {
                 this.sessionType = sessionType;
@@ -1313,7 +1313,7 @@ public class ClientHandler extends Thread implements UserObserver {
                 ClientHandler target = com.chat.server.Server.getClientHandler(inviteUser);
                 if (target != null) {
                     System.out.println("[DEBUG][SubGroupInviteHandler] 通知被邀请用户: " + inviteUser);
-                    // 新增：发送专用小组邀请消息，带上群名、小组ID、邀请人
+                    // 新增：发送专用小组邀请消息，带上群名���小组ID、邀请人
                     target.send("SG_INVITE_NOTIFY:" + groupName + ":" + subGroupId + ":" + handler.username);
                 } else {
                     System.out.println("[DEBUG][SubGroupInviteHandler] 被邀请用户不在线: " + inviteUser);
@@ -1492,6 +1492,10 @@ public class ClientHandler extends Thread implements UserObserver {
             this.voiceSocket = socket;
         }
 
+        // 使用DebugAudioPlayer进行本地播放
+        private void playPcm(byte[] pcm) {
+            com.chat.NewFunctions.audio.DebugAudioPlayer.playPcm(pcm);
+        }
         @Override
         public void run() {
             try {
@@ -1503,19 +1507,73 @@ public class ClientHandler extends Thread implements UserObserver {
                     voiceSocket.close();
                     return;
                 }
-                username = (String) first;
+                String got_sessionId = (String) first;
+                String[] users = got_sessionId.split("_to_");
+                if (users.length != 2) {
+                    voiceSocket.close();
+                    return;
+                }
+                username = users[0];
+
                 Server.registerVoiceClient(username, this);
                 System.out.println("[VoiceSocket] 用户 " + username + " 语音socket已注册");
                 while (running && !voiceSocket.isClosed()) {
-                    // 读取sessionId和音频包
-                    String sessionId = (String) in.readObject();
-                    List<AudioPacket> packets = (List<AudioPacket>) in.readObject();
-                    // 解析目标用户
-                    String targetUser = parseTargetUserFromSessionId(sessionId, username);
-                    if (targetUser == null) continue;
-                    VoiceSocketHandler targetHandler = Server.getVoiceClient(targetUser);
-                    if (targetHandler != null) {
-                        targetHandler.sendAudio(sessionId, packets);
+                    Object obj = null;
+                    try {
+                        obj = in.readObject();
+                    } catch (EOFException eof) {
+                        break;
+                    }
+                    if (obj == null) continue;
+                    if (obj instanceof String) {
+                        String str = (String) obj;
+                        if (str.startsWith("/")) {
+                            // 命令字符串，如 /VOICE_INVITE 目标用户
+                            String cmd = str;
+                            String[] parts = cmd.trim().split("\\s+", 3);
+                            if (parts.length >= 2 && "/VOICE_INVITE".equalsIgnoreCase(parts[0])) {
+                                String targetUser = parts[1];
+                                VoiceSocketHandler targetHandler = Server.getVoiceClient(targetUser);
+                                if (targetHandler != null) {
+                                    targetHandler.sendCommand("VOICE_INVITE_FROM:" + username);
+                                    this.sendCommand("SUCCESS: 语音通话邀请已发送");
+                                } else {
+                                    this.sendCommand("ERROR: 目标用户不在线");
+                                }
+                            } else if (parts.length >= 2 && "/VOICE_ACCEPT".equalsIgnoreCase(parts[0])) {
+                                String inviter = parts[1];
+                                VoiceSocketHandler inviterHandler = Server.getVoiceClient(inviter);
+                                if (inviterHandler != null) {
+                                    inviterHandler.sendCommand("VOICE_ACCEPTED_BY:" + username);
+                                    this.sendCommand("SUCCESS: 已同意语音通话");
+                                } else {
+                                    this.sendCommand("ERROR: 发起方不在线");
+                                }
+                            } else {
+                                this.sendCommand("ERROR: 未知命令 " + cmd);
+                            }
+                        } else {
+                            // 不是命令，是 sessionId
+
+                            String sessionId = str;
+                            List<com.chat.NewFunctions.audio.AudioPacket> packets = (List<com.chat.NewFunctions.audio.AudioPacket>) in.readObject();
+                            // 本地播放
+//                            for (com.chat.NewFunctions.audio.AudioPacket packet : packets) {
+//                                playPcm(packet.getData());
+//                            }
+                            // 新增：转发给目标用户
+                            String targetUser = parseTargetUserFromSessionId(sessionId, username);
+                            if (targetUser != null && !targetUser.equals(username)) {
+                                VoiceSocketHandler targetHandler = Server.getVoiceClient(targetUser);
+                                if (targetHandler != null) {
+                                    targetHandler.sendAudio(sessionId, packets);
+                                }else{
+                                    System.out.println("[VoiceSocket] 目标用户 " + targetUser + " 不在线，无法转发音频");
+                                }
+                            }else {
+                                System.out.println("[VoiceSocket] 无效的sessionId或目标用户: " + sessionId);
+                            }
+                        }
                     }
                 }
             } catch (Exception e) {
@@ -1529,11 +1587,22 @@ public class ClientHandler extends Thread implements UserObserver {
         public void sendAudio(String sessionId, List<AudioPacket> packets) {
             synchronized (out) {
                 try {
+                    System.out.println("[VoiceSocket] sendAudio: " + sessionId);
                     out.writeObject(sessionId);
                     out.writeObject(packets);
                     out.flush();
                 } catch (IOException e) {
                     System.out.println("[VoiceSocket] 向 " + username + " 发送音频失败: " + e.getMessage());
+                }
+            }
+        }
+        public void sendCommand(String cmd) {
+            synchronized (out) {
+                try {
+                    out.writeObject(cmd);
+                    out.flush();
+                } catch (IOException e) {
+                    System.out.println("[VoiceSocket] 向 " + username + " 发送命令失败: " + e.getMessage());
                 }
             }
         }

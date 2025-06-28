@@ -341,7 +341,12 @@ public class ChatUIFriends implements MessageObserver {
             e.printStackTrace();
         }
     }
-
+    public void onVoiceCallAccepted(String accepter) {
+        PrivateChatWindow win = privateChats.get(accepter);
+        if (win != null) {
+            win.onVoiceCallAccepted(accepter);
+        }
+    }
     // 私聊窗口内部类
     class PrivateChatWindow extends JFrame {
         private JTextPane chatArea;
@@ -768,12 +773,14 @@ public class ChatUIFriends implements MessageObserver {
                 voiceChatManager.initAudioDevices();
                 // 生成唯一会话ID
                 voiceSessionId = currentUser + "_to_" + friendName;
+//                String voiceSessionId_reverse = friendName + "_to_" + currentUser;
                 // 连接服务器语音转发端口（假设端口为19999，可根据实际配置）
                 int voicePort = 19999;
                 voiceChatManager.connectToVoiceServer(serverHost, voicePort);
                 // 启动语音会话
                 voiceChatManager.startSession(voiceSessionId);
-                appendMessage("[语音通话已开始]");
+//                voiceChatManager.startSession(voiceSessionId_reverse);
+                appendMessage("[语音通话已开始]"+ voiceSessionId);
                 isVoiceCalling = true;
                 voiceCallButton.setEnabled(false);
                 stopVoiceCallButton.setEnabled(true);
@@ -809,7 +816,7 @@ public class ChatUIFriends implements MessageObserver {
                 int voicePort = 19999;
                 voiceChatManager.connectToVoiceServer(serverHost, voicePort);
                 voiceChatManager.startSession(voiceSessionId);
-                appendMessage("[语音通话已开始]");
+                appendMessage("[语音通话已开始]" );
                 isVoiceCalling = true;
                 voiceCallButton.setEnabled(false);
                 stopVoiceCallButton.setEnabled(true);

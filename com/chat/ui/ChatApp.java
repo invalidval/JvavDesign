@@ -431,7 +431,7 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
             String accepter = message.substring("VOICE_ACCEPTED_BY:".length());
             JOptionPane.showMessageDialog(frame, accepter + " 已同意语音通话，现在可以开始通话。");
             // 通知好友UI建立语音会话
-            if (friendsUI != null) friendsUI.onMessageReceived(accepter);
+            if (friendsUI != null) friendsUI.onVoiceCallAccepted(accepter);
 
         }
     }

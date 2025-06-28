@@ -131,7 +131,7 @@ public class VoiceChatManager {
     public void startSession(String sessionId) {
         activeSessions.add(sessionId);
         conferenceSessions.putIfAbsent(sessionId, new CopyOnWriteArrayList<>());
-
+        System.out.println("[LOG] startSession called, sessionId=" + sessionId);
         if (!isRunning.get()) {
             isRunning.set(true);
             startAudioCapture();
@@ -196,6 +196,7 @@ public class VoiceChatManager {
         System.out.println("[LOG] receivePackets called, sessionId=" + sessionId + ", packets.size=" + (packets == null ? 0 : packets.size()));
         if (!conferenceSessions.containsKey(sessionId)) {
             System.out.println("[LOG] conferenceSessions 不包含 sessionId: " + sessionId);
+            startSession(sessionId);
             return;
         }
         conferenceSessions.get(sessionId).addAll(packets);
