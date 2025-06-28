@@ -204,7 +204,7 @@ public class SubGroupUI {
                     JOptionPane.showMessageDialog(this, "请等待对方发起连接...", "提示", JOptionPane.INFORMATION_MESSAGE);
                     new Thread(() -> {
                         try {
-                            subGroupVoiceChatManager.startServer(defaultVoicePort);
+//                            subGroupVoiceChatManager.startServer(defaultVoicePort);
                         } catch (Exception ex) {
                             SwingUtilities.invokeLater(() -> appendMessage("[语音服务端启动失败] " + ex.getMessage()));
                         }

@@ -319,6 +319,13 @@ public class ChatUIFriends implements MessageObserver {
         } else if (message.startsWith("SUCCESS: 好友删除成功")) {
             JOptionPane.showMessageDialog(parentFrame, message);
             client.sendMessage("/f"); // 刷新好友列表
+        } else if (message.startsWith("VOICE_ACCEPTED_BY:")) {
+            // 对方同意语音通话
+            String accepter = message.substring(18);
+            PrivateChatWindow win = privateChats.get(accepter);
+            if (win != null) {
+                win.onVoiceCallAccepted(accepter);
+            }
         }
     }
 
@@ -761,27 +768,9 @@ public class ChatUIFriends implements MessageObserver {
                 voiceChatManager.initAudioDevices();
                 // 生成唯一会话ID
                 voiceSessionId = currentUser + "_to_" + friendName;
-                // 选择角色：客户端或服务端
-                String[] options = {"作为主叫（对方需先点被叫）", "作为被叫（先点，等待主叫连接）"};
-                int choice = JOptionPane.showOptionDialog(this, "请选择通话角色：", "语音通话",
-                        JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
-                if (choice == 0) {
-                    // 主叫，作为客户端连接
-                    String host = JOptionPane.showInputDialog(this, "请输入对方IP（本机可填127.0.0.1）", "127.0.0.1");
-                    voiceChatManager.connectToPeer(host, defaultVoicePort);
-                } else if (choice == 1) {
-                    // 被叫，作为服务端等待
-                    JOptionPane.showMessageDialog(this, "请等待对方发起连接...", "提示", JOptionPane.INFORMATION_MESSAGE);
-                    new Thread(() -> {
-                        try {
-                            voiceChatManager.startServer(defaultVoicePort);
-                        } catch (Exception ex) {
-                            SwingUtilities.invokeLater(() -> appendMessage("[语音服务端启动失败] " + ex.getMessage()));
-                        }
-                    }).start();
-                } else {
-                    return;
-                }
+                // 连接服务器语音转发端口（假设端口为19999，可根据实际配置）
+                int voicePort = 19999;
+                voiceChatManager.connectToVoiceServer(serverHost, voicePort);
                 // 启动语音会话
                 voiceChatManager.startSession(voiceSessionId);
                 appendMessage("[语音通话已开始]");
@@ -808,6 +797,27 @@ public class ChatUIFriends implements MessageObserver {
             isVoiceCalling = false;
             voiceCallButton.setEnabled(true);
             stopVoiceCallButton.setEnabled(false);
+        }
+
+        // 对方同意语音通话后建立语音会话
+        public void onVoiceCallAccepted(String accepter) {
+            if (isVoiceCalling) return;
+            try {
+                voiceChatManager.initAudioDevices();
+                // 这里假设 voiceSessionId 格式为 currentUser + "_to_" + accepter
+                voiceSessionId = currentUser + "_to_" + accepter;
+                int voicePort = 19999;
+                voiceChatManager.connectToVoiceServer(serverHost, voicePort);
+                voiceChatManager.startSession(voiceSessionId);
+                appendMessage("[语音通话已开始]");
+                isVoiceCalling = true;
+                voiceCallButton.setEnabled(false);
+                stopVoiceCallButton.setEnabled(true);
+            } catch (LineUnavailableException ex) {
+                appendMessage("[语音设备初始化失败] " + ex.getMessage());
+            } catch (Exception ex) {
+                appendMessage("[语音通话启动失败] " + ex.getMessage());
+            }
         }
     }
 }

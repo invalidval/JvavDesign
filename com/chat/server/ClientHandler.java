@@ -55,6 +55,8 @@ public class ClientHandler extends Thread implements UserObserver {
         handlerStrategies.put("/SG_LIST", new SubGroupListHandler());
         handlerStrategies.put("/SG_HISTORY", new SubGroupHistoryHandler());
         handlerStrategies.put("/SG_ACCEPT", new SubGroupAcceptHandler()); // 新增小组邀请接受处理器
+        handlerStrategies.put("/VOICE_INVITE", new VoiceInviteHandler());
+        handlerStrategies.put("/VOICE_ACCEPT", new VoiceAcceptHandler());
     }
 
     public void run() {
@@ -1478,4 +1480,111 @@ public class ClientHandler extends Thread implements UserObserver {
             handler.send("SG_LIST:" + sgList);
         }
     }    // ================== 小组相关命令处理器 END ==================
+    // ================== 语音专用socket处理线程 ==================
+    public static class VoiceSocketHandler extends Thread {
+        private final Socket voiceSocket;
+        private ObjectInputStream in;
+        private ObjectOutputStream out;
+        private String username;
+        private volatile boolean running = true;
+
+        public VoiceSocketHandler(Socket socket) {
+            this.voiceSocket = socket;
+        }
+
+        @Override
+        public void run() {
+            try {
+                out = new ObjectOutputStream(voiceSocket.getOutputStream());
+                in = new ObjectInputStream(voiceSocket.getInputStream());
+                // 第一个包要求客户端先发送用户名
+                Object first = in.readObject();
+                if (!(first instanceof String)) {
+                    voiceSocket.close();
+                    return;
+                }
+                username = (String) first;
+                Server.registerVoiceClient(username, this);
+                System.out.println("[VoiceSocket] 用户 " + username + " 语音socket已注册");
+                while (running && !voiceSocket.isClosed()) {
+                    // 读取sessionId和音频包
+                    String sessionId = (String) in.readObject();
+                    List<AudioPacket> packets = (List<AudioPacket>) in.readObject();
+                    // 解析目标用户
+                    String targetUser = parseTargetUserFromSessionId(sessionId, username);
+                    if (targetUser == null) continue;
+                    VoiceSocketHandler targetHandler = Server.getVoiceClient(targetUser);
+                    if (targetHandler != null) {
+                        targetHandler.sendAudio(sessionId, packets);
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("[VoiceSocket] " + username + " 语音socket断开: " + e.getMessage());
+            } finally {
+                running = false;
+                if (username != null) Server.unregisterVoiceClient(username);
+                try { voiceSocket.close(); } catch (IOException ignored) {}
+            }
+        }
+        public void sendAudio(String sessionId, List<AudioPacket> packets) {
+            synchronized (out) {
+                try {
+                    out.writeObject(sessionId);
+                    out.writeObject(packets);
+                    out.flush();
+                } catch (IOException e) {
+                    System.out.println("[VoiceSocket] 向 " + username + " 发送音频失败: " + e.getMessage());
+                }
+            }
+        }
+        private String parseTargetUserFromSessionId(String sessionId, String sender) {
+            // 假设 sessionId 格式为 userA_to_userB
+            if (sessionId == null) return null;
+            String[] parts = sessionId.split("_to_");
+            if (parts.length == 2) {
+                if (parts[0].equals(sender)) return parts[1];
+                else return parts[0];
+            }
+            return null;
+        }
+    }
+    // ================== 语音通话邀请/同意处理器 ==================
+    class VoiceInviteHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            // /voice_invite 目标用户名
+            String[] parts = message.trim().split("\\s+");
+            if (parts.length < 2) {
+                handler.send("ERROR: 格式为 /voice_invite 用户名");
+                return;
+            }
+            String targetUser = parts[1];
+            ClientHandler targetHandler = Server.getClientHandler(targetUser);
+            if (targetHandler != null) {
+                // 通知目标用户有语音通话邀请
+                targetHandler.send("VOICE_INVITE_FROM:" + handler.username);
+                handler.send("SUCCESS: 语音通话邀请已发送");
+            } else {
+                handler.send("ERROR: 目标用户不在线");
+            }
+        }
+    }
+    class VoiceAcceptHandler implements MessageHandlerStrategy {
+        public void handle(String message, ClientHandler handler) {
+            // /voice_accept 发起方用户名
+            String[] parts = message.trim().split("\\s+");
+            if (parts.length < 2) {
+                handler.send("ERROR: 格式为 /voice_accept 用户名");
+                return;
+            }
+            String inviter = parts[1];
+            ClientHandler inviterHandler = Server.getClientHandler(inviter);
+            if (inviterHandler != null) {
+                // 通知发起方，对方已同意
+                inviterHandler.send("VOICE_ACCEPTED_BY:" + handler.username);
+                handler.send("SUCCESS: 已同意语音通话");
+            } else {
+                handler.send("ERROR: 发起方不在线");
+            }
+        }
+    }
 }

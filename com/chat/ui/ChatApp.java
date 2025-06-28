@@ -419,6 +419,20 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
                 });
                 dialog.setVisible(true);
             }
+        } else if (message.startsWith("VOICE_INVITE_FROM:")) {
+            // 语音通话邀请
+            String inviter = message.substring("VOICE_INVITE_FROM:".length());
+            int result = JOptionPane.showConfirmDialog(frame, inviter + " 邀请你语音通话，是否同意？", "语音通话邀请", JOptionPane.YES_NO_OPTION);
+            if (result == JOptionPane.YES_OPTION) {
+                client.sendMessage("/voice_accept " + inviter);
+            }
+        } else if (message.startsWith("VOICE_ACCEPTED_BY:")) {
+            // 对方同意语音通话
+            String accepter = message.substring("VOICE_ACCEPTED_BY:".length());
+            JOptionPane.showMessageDialog(frame, accepter + " 已同意语音通话，现在可以开始通话。");
+            // 通知好友UI建立语音会话
+            if (friendsUI != null) friendsUI.onMessageReceived(accepter);
+
         }
     }
 

@@ -11,14 +11,27 @@ public class AudioEncoder {
     private AudioAttributes audioAttributes;
     private final EncodingAttributes encodingAttributes;
     private final Encoder encoder;
+// ***WARNING***:需要系统环境变量FFMPEG_PATH指向ffmpeg的bin路径
+// ***WARNING***:需要系统环境变量FFMPEG_PATH指向ffmpeg的bin路径
+// ***WARNING***:需要系统环境变量FFMPEG_PATH指向ffmpeg的bin路径
+// 重要的事情说三遍
     public AudioEncoder() {
-        this(null);
-    }
-    public AudioEncoder(String ffmpegPath) {
-        if (ffmpegPath != null && !ffmpegPath.isEmpty()) {
-            System.setProperty("ffmpeg.location", ffmpegPath);
+        String ffmpegLocation ;
+        String envPath = System.getenv("FFMPEG_PATH");
+        if (envPath != null && !envPath.isEmpty()) {
+            ffmpegLocation = envPath;
+            System.out.println("FFMPEG LOCATION: " + ffmpegLocation);
+        } else {
+            // 默认常用路径（可根据实际情况修改）
+            System.out.println("未配置FFMPEG_PATH环境变量，使用默认路径");
+            ffmpegLocation = "D:/ffmpeg-7.0.2-essentials_build/bin/ffmpeg.exe";
         }
-
+        // 校验ffmpeg可执行文件是否存在
+        File ffmpegFile = new File(ffmpegLocation);
+        if (!ffmpegFile.exists()) {
+            throw new RuntimeException("未找到ffmpeg可执行文件: " + ffmpegLocation + "，请检查路径或配置环境变量FFMPEG_PATH");
+        }
+        System.setProperty("ffmpeg.location", ffmpegLocation);
         encoder = new Encoder();
         // 设置音频属性，参数与采集端一致
         audioAttributes = new AudioAttributes();
