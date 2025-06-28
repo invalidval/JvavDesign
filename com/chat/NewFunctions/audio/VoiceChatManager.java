@@ -188,10 +188,11 @@ public class VoiceChatManager {
      * 接收网络音频数据包
      */
     public void receivePackets(String sessionId, List<AudioPacket> packets) {
+        System.out.println("[LOG] receivePackets called, sessionId=" + sessionId + ", packets.size=" + (packets == null ? 0 : packets.size()));
         if (!conferenceSessions.containsKey(sessionId)) {
+            System.out.println("[LOG] conferenceSessions 不包含 sessionId: " + sessionId);
             return;
         }
-
         conferenceSessions.get(sessionId).addAll(packets);
         processReceivedAudio(sessionId);
     }
@@ -200,17 +201,20 @@ public class VoiceChatManager {
      * 处理接收到的音频数据
      */
     private void processReceivedAudio(String sessionId) {
+        System.out.println("[LOG] processReceivedAudio called, sessionId=" + sessionId);
         executorService.submit(() -> {
             try {
                 List<AudioPacket> packets = conferenceSessions.get(sessionId);
+                System.out.println("[LOG] packets.size=" + (packets == null ? 0 : packets.size()));
                 byte[] audioData = packetizer.depacketize(packets);
+                System.out.println("[LOG] depacketize 完成, audioData.length=" + (audioData == null ? 0 : audioData.length));
                 byte[] decodedData = encoder.decodeAudio(audioData);
+                System.out.println("[LOG] decodeAudio 完成, decodedData.length=" + (decodedData == null ? 0 : decodedData.length));
                 playAudio(decodedData);
-
                 // 清除已处理的数据包
                 packets.clear();
             } catch (Exception e) {
-                System.err.println("[" + sessionId + "] 数据包处理失败: " + e.getMessage());
+                System.err.println("[LOG][" + sessionId + "] 数据包处理失败: " + e.getMessage());
             }
         });
     }
@@ -219,8 +223,10 @@ public class VoiceChatManager {
      * 播放音频数据
      */
     private void playAudio(byte[] audioData) {
+        System.out.println("[LOG] playAudio called, audioData.length=" + (audioData == null ? 0 : audioData.length));
         speaker.start();
         speaker.write(audioData, 0, audioData.length);
+        System.out.println("播放音频数据，长度: " + audioData.length + " 字节");
     }
 
     /**
@@ -230,6 +236,9 @@ public class VoiceChatManager {
         socket = new Socket(host, port);
         out = new ObjectOutputStream(socket.getOutputStream());
         in = new ObjectInputStream(socket.getInputStream());
+        this.voiceHost = host;
+        this.voicePort = port;
+        System.out.println("[LOG] connectToPeer: voiceHost=" + voiceHost + ", voicePort=" + voicePort);
         startReceiveThread();
     }
 
@@ -241,6 +250,13 @@ public class VoiceChatManager {
         socket = serverSocket.accept();
         out = new ObjectOutputStream(socket.getOutputStream());
         in = new ObjectInputStream(socket.getInputStream());
+        this.voiceHost = socket.getInetAddress().getHostAddress();
+        this.voicePort = socket.getPort();
+        System.out.println("[LOG] startServer: voiceHost=" + voiceHost + ", voicePort=" + voicePort);
+        // 启动独立语音Socket监听，端口+1（如主端口50000，则音频端口50001）
+        int audioPort = port + 1;
+        System.out.println("[LOG] startVoiceServer on port " + audioPort);
+        startVoiceServer(audioPort);
         startReceiveThread();
     }
 
@@ -263,6 +279,9 @@ public class VoiceChatManager {
             while (!serverSocket.isClosed()) {
                 try (Socket clientSocket = serverSocket.accept();
                      ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream())) {
+                    this.voiceHost = clientSocket.getInetAddress().getHostAddress();
+                    // 不再覆盖 voicePort，始终保持为服务端监听端口
+                    System.out.println("[LOG] startVoiceServer: voiceHost=" + voiceHost + ", voicePort=" + voicePort);
                     String sessionId = (String) in.readObject();
                     List<AudioPacket> packets = (List<AudioPacket>) in.readObject();
                     receivePackets(sessionId, packets);
@@ -278,28 +297,22 @@ public class VoiceChatManager {
      * 通过独立Socket发送音频包（每次短连接）
      */
     private void sendPacketsToNetwork(String sessionId, List<AudioPacket> packets) {
-        // 示例：模拟网络发送
-        System.out.println("[" + sessionId + "] 发送 " + packets.size() + " 个数据包");
-        // 新增：通过Socket发送
-        if (out != null) {
-            try {
-                out.writeObject(sessionId);
-                out.writeObject(packets);
-                out.flush();
-            } catch (IOException e) {
-                System.err.println("Socket发送失败: " + e.getMessage());
-            }
-        }
-        // 独立Socket短连接发送
+        System.out.println("[LOG] sendPacketsToNetwork called, sessionId=" + sessionId + ", packets.size=" + (packets == null ? 0 : packets.size()));
+        System.out.println("[LOG] voiceHost=" + voiceHost + ", voicePort=" + voicePort);
+        // 只保留独立Socket短连接发送
         if (voiceHost != null && voicePort > 0) {
             try (Socket voiceSocket = new Socket(voiceHost, voicePort);
                  ObjectOutputStream out = new ObjectOutputStream(voiceSocket.getOutputStream())) {
+                System.out.println("[LOG] Socket已连接: " + voiceHost + ":" + voicePort);
                 out.writeObject(sessionId);
                 out.writeObject(packets);
                 out.flush();
+                System.out.println("[LOG] 数据已发送: sessionId=" + sessionId + ", packets.size=" + packets.size());
             } catch (IOException e) {
-                System.err.println("独立Socket语音发送失败: " + e.getMessage());
+                System.err.println("Socket发送失败: " + e.getMessage());
             }
+        } else {
+            System.out.println("[LOG] voiceHost 或 voicePort 未设置，未发送");
         }
     }
 

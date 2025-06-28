@@ -11,19 +11,23 @@ public class AudioEncoder {
     private AudioAttributes audioAttributes;
     private final EncodingAttributes encodingAttributes;
     private final Encoder encoder;
-
     public AudioEncoder() {
+        this(null);
+    }
+    public AudioEncoder(String ffmpegPath) {
+        if (ffmpegPath != null && !ffmpegPath.isEmpty()) {
+            System.setProperty("ffmpeg.location", ffmpegPath);
+        }
+
         encoder = new Encoder();
         // 设置音频属性，参数与采集端一致
         audioAttributes = new AudioAttributes();
-        audioAttributes.setCodec("aac"); // 你也可以用"libmp3lame"或其他支持的编码器
-        audioAttributes.setBitRate(64000); // 16k采样率下64kbps较合适
-        audioAttributes.setChannels(2); // 单声道
-        audioAttributes.setSamplingRate(44100); // 采集端采样率
-
-        // 设置编码属性
+        audioAttributes.setCodec("aac");
+        audioAttributes.setBitRate(64000);
+        audioAttributes.setChannels(2);
+        audioAttributes.setSamplingRate(44100);
         encodingAttributes = new EncodingAttributes();
-        encodingAttributes.setInputFormat("wav"); // 原始数据应封装为wav
+        encodingAttributes.setInputFormat("wav");
         encodingAttributes.setAudioAttributes(audioAttributes);
     }
 
@@ -137,4 +141,3 @@ public class AudioEncoder {
         this.encodingAttributes.setAudioAttributes(audioAttributes);
     }
 }
-

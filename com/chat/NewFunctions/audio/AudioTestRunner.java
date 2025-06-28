@@ -1,5 +1,8 @@
 package com.chat.NewFunctions.audio;
 
+import ws.schild.jave.Encoder;
+import ws.schild.jave.EncoderException;
+
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.LineUnavailableException;
@@ -15,13 +18,22 @@ public class AudioTestRunner {
     private static final int TEST_DATA_SIZE = 4096;
 
     public static void main(String[] args) throws Exception {
-        System.setProperty("ffmpeg.location", "G:\\Delta Force\\launcher\\icreate\\recorder-release\\ffmpeg.exe");
+//        System.setProperty("ffmpeg.location", "D:\\ffmpeg-7.0.2-essentials_build\\bin\\ffmpeg.exe");
 
         System.out.println("=== 开始语音聊天功能测试 ===");
 
         // 测试1：音频编码解码功能测试
-        //testAudioEncodeDecode();
+//        testAudioEncodeDecode();
 
+//        // 2. 使用自定义 Locator 初始化 Encoder
+//        ProcessBuilder pb = new ProcessBuilder("ffmpeg", "-version");
+//        Process process = pb.start();
+//        int exitCode = process.waitFor();
+//        if (exitCode == 0) {
+//            System.out.println("ffmpeg 可用");
+//        } else {
+//            System.out.println("ffmpeg 不可用");
+//        }
         // 测试2：完整语音聊天流程测试
         testVoiceChatSession();
 
