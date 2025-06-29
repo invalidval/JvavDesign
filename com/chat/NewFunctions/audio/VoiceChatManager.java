@@ -122,6 +122,7 @@ public class VoiceChatManager {
         DataLine.Info speakerInfo = new DataLine.Info(SourceDataLine.class, AUDIO_FORMAT);
         speaker = (SourceDataLine) AudioSystem.getLine(speakerInfo);
         speaker.open(AUDIO_FORMAT);
+        speaker.start();
     }
 
     /**
@@ -263,9 +264,18 @@ public class VoiceChatManager {
      */
     private void playAudio(byte[] audioData) {
         System.out.println("[LOG] playAudio called, audioData.length=" + (audioData == null ? 0 : audioData.length));
-        speaker.start();
-        speaker.write(audioData, 0, audioData.length);
-        System.out.println("播放音频数据，长度: " + audioData.length + " 字节");
+        // 4字节对齐（frameSize=4，16bit立体声）
+        int frameSize = 4;
+        int validLen = audioData.length - (audioData.length % frameSize);
+        byte[] pcm = audioData;
+        if (validLen != audioData.length) {
+            byte[] padded = new byte[validLen + frameSize];
+            System.arraycopy(audioData, 0, padded, 0, audioData.length);
+            for (int i = audioData.length; i < padded.length; i++) padded[i] = 0;
+            pcm = padded;
+        }
+        speaker.write(pcm, 0, pcm.length);
+        System.out.println("播放音频数据，长度: " + pcm.length + " 字节");
     }
 
     /**
