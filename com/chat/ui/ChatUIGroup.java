@@ -61,13 +61,13 @@ public class ChatUIGroup implements MessageObserver {
         JButton joinGroupButton = new JButton("加入群聊"); // 新增按钮
         joinGroupButton.addActionListener(e -> showJoinGroupDialog()); // 绑定加入群聊逻辑
 
-        JButton myImagesButton = new JButton("我的图片"); // 新增“我的图片”按钮
-        myImagesButton.addActionListener(e -> openMyImagesFolder()); // 绑定事件
+        /*JButton myImagesButton = new JButton("我的图片"); // 新增“我的图片”按钮
+        myImagesButton.addActionListener(e -> openMyImagesFolder()); // 绑定事件*/
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         buttonPanel.add(createGroupButton);
         buttonPanel.add(joinGroupButton); // 添加加入群聊按钮
-        buttonPanel.add(myImagesButton); // 添加“我的图片”按钮
+     /*   buttonPanel.add(myImagesButton); // 添加“我的图片”按钮*/
 
         groupPanel.add(scrollPane, BorderLayout.CENTER);
         groupPanel.add(buttonPanel, BorderLayout.SOUTH);
@@ -1053,7 +1053,6 @@ public class ChatUIGroup implements MessageObserver {
                 win.showFileReceiveDialog(fileId, fileName, fileSize, sender);
             }
         } else if (message.startsWith("IMAGE_NOTIFY:") && message.endsWith(":group")) {
-            System.out.println("[DEBUG][ChatUIGroup] 收到群聊图片通知: " + message);
             // 群聊图片通知
             String[] parts = message.split(":");
             if (parts.length >= 6) {

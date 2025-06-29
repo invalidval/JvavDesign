@@ -9,4 +9,7 @@
   <message id="2311" receiver="111" sender="s" timestamp="2025-06-29 15:59:40" type="GROUP">
     <content>ffff</content>
   </message>
+  <message id="2312" receiver="111" sender="s" timestamp="2025-06-29 19:23:19" type="GROUP">
+    <content>nihao</content>
+  </message>
 </messages>

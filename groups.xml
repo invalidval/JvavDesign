@@ -1,19 +1,24 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <groups>
     <group name="111">
-        <member>r</member>
         <member>s</member>
+        <member>r</member>
+        <member>333</member>
         <subgroup id="341daeaa-ee46-4276-8687-34591194212a" name="1"/>
         <subgroup id="fd095fec-0b5d-40af-804b-6bec7e15f9fa" name="s"/>
         <subgroup id="9a71c226-9f85-4a77-bf3c-f69c3f00c184" name="ss">
             <sgmember>ss</sgmember>
-            <sgmember>r</sgmember>
-            <sgmember>s</sgmember>
         </subgroup>
+        <subgroup id="c3a8fe9d-d857-46d2-97f6-d937728d4c81" name="345"/>
+        <subgroup id="082025a3-78e5-4229-aace-9efc5cba1608" name="111">
+            <sgmember>333</sgmember>
+        </subgroup>
+        <subgroup id="226221e1-353b-4e0d-8e4e-7606f1d1817a" name="123"/>
+        <subgroup id="67cad187-d3c4-408c-b4b9-0c7c229b5c27" name="11111"/>
     </group>
     <group name="123">
-        <member>r</member>
         <member>s</member>
+        <member>r</member>
         <member>111</member>
         <subgroup id="4691b1df-4415-4de4-b210-6e4583ce7c10" name="1234"/>
         <subgroup id="8d439fde-ea38-4441-a48f-dfe4b156c464" name="dddd">
@@ -31,9 +36,9 @@
         </subgroup>
     </group>
     <group name="testgroup">
+        <member>3</member>
         <member>1</member>
         <member>64</member>
-        <member>3</member>
         <subgroup id="62e6b090-4c0d-414e-80ff-e7e747dbd7a2" name="testsubgroup1">
             <sgmember>1</sgmember>
             <sgmember>3</sgmember>
@@ -41,7 +46,18 @@
         </subgroup>
     </group>
     <group name="中央政治局">
-        <member>1</member>
         <member>3</member>
+        <member>1</member>
+    </group>
+    <group name="1111">
+        <member>s</member>
+        <member>r</member>
+    </group>
+    <group name="11234">
+        <member>s</member>
+        <member>r</member>
+        <subgroup id="f74d53db-8d58-4edf-8615-074f0a3e2fe1" name="111">
+            <sgmember>r</sgmember>
+        </subgroup>
     </group>
 </groups>

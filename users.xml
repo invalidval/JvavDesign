@@ -25,6 +25,7 @@
         <friend>111</friend>
         <friend>r</friend>
     </user>
+    <user name="333" password="333"/>
     <user name="bob" password="securepass">
         <friend>alice</friend>
     </user>
