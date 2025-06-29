@@ -148,6 +148,24 @@ public class VoiceChatManager {
 
         if (activeSessions.isEmpty()) {
             isRunning.set(false);
+            // 释放音频设备资源
+            if (microphone != null) {
+                try {
+                    microphone.stop();
+                    microphone.close();
+                } catch (Exception e) {
+                    System.err.println("[LOG] 关闭麦克风失败: " + e.getMessage());
+                }
+                microphone = null;
+            }
+            if (speaker != null) {
+                try {
+                    speaker.close();
+                } catch (Exception e) {
+                    System.err.println("[LOG] 关闭扬声器失败: " + e.getMessage());
+                }
+                speaker = null;
+            }
         }
     }
 
@@ -362,15 +380,24 @@ public class VoiceChatManager {
     public void shutdown() {
         isRunning.set(false);
         executorService.shutdown();
-        closeSocket(); // 新增：关闭Socket
+        closeSocket();
 
         if (microphone != null) {
-            microphone.stop();
-            microphone.close();
+            try {
+                microphone.stop();
+                microphone.close();
+            } catch (Exception e) {
+                System.err.println("[LOG] 关闭麦克风失败: " + e.getMessage());
+            }
             microphone = null;
         }
         if (speaker != null) {
-            speaker.close();
+            try {
+                speaker.close();
+            } catch (Exception e) {
+                System.err.println("[LOG] 关闭扬声器失败: " + e.getMessage());
+            }
+            speaker = null;
         }
     }
 

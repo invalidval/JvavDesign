@@ -7,7 +7,7 @@ public class SimpleVoiceClient {
     private Client client;
     private VoiceChatManager voiceManager;
     private String username;
-    private String serverHost = "127.0.0.1";
+    private String serverHost = "10.129.181.38";
     private int serverPort = 8888; // 主消息端口
     private int voicePort = 19999;  // 语音socket端口
     private String sessionId;
