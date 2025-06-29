@@ -257,10 +257,18 @@ public class SubGroupUI {
                 if (com.chat.NewFunctions.image.ImageManager.isImageFile(file)) {
                     try {
                         int imagePort = 18989;
+                        // 路径格式：C:\Users\<用户名>\ChatLocalHistory\images\SubGroupsImage\发送方用户名_to_群聊名称#小组ID\
+                        String userHome = System.getProperty("user.home");
+                        String imageSaveDir = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "SubGroupsImage" + File.separator + currentUser + "_to_" + groupName + "#" + subGroupId;
+                        File saveDir = new File(imageSaveDir);
+                        if (!saveDir.exists()) saveDir.mkdirs();
+                        File destFile = new File(saveDir, file.getName());
+                        java.nio.file.Files.copy(file.toPath(), destFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        String groupKey = groupName + "#" + subGroupId;
                         com.chat.NewFunctions.image.ImageManager.sendImageToServer(
-                                client.getHost(), imagePort, file, groupName + "#" + subGroupId, currentUser + ":group");
-                        appendImageMessage(currentUser, file.getName(), file.getAbsolutePath());
-                        saveSubGroupMessageToLocal(currentUser, "[图片] " + file.getName() + " " + file.getAbsolutePath());
+                                client.getHost(), imagePort, destFile, groupKey, currentUser + ":group");
+                        appendImageMessage(currentUser, destFile.getName(), destFile.getAbsolutePath());
+                        saveSubGroupMessageToLocal(currentUser, "[图片] " + destFile.getName() + " " + destFile.getAbsolutePath());
                     } catch (Exception ex) {
                         appendMessage("[图片发送失败: " + file.getName() + "]");
                         JOptionPane.showMessageDialog(this, "图片发送失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
@@ -371,7 +379,7 @@ public class SubGroupUI {
                 }
             });
         }
-        // 加载本地小组聊天历史
+        // 加载本���小组聊天历史
         private void loadLocalSubGroupChatHistory() {
             String fileName = "chat_subgroup_" + groupName + "_" + subGroupId + ".txt";
             File file = new File(System.getProperty("user.home") + File.separator + "ChatLocalHistory", fileName);
@@ -426,7 +434,7 @@ public class SubGroupUI {
             appendMessage(sender + " 发送了文件: " + fileName);
             int option = JOptionPane.showConfirmDialog(this,
                     sender + " 发送了文件: " + fileName + "\n是否下载?",
-                    "收到小组文件",
+                    "收到���组文件",
                     JOptionPane.YES_NO_OPTION);
             if (option == JOptionPane.YES_OPTION) {
                 String docPath = System.getProperty("user.home") + File.separator + "Documents" + File.separator + "ChatFiles" + File.separator + currentUser + File.separator + groupName + "#" + subGroupId;
@@ -443,7 +451,7 @@ public class SubGroupUI {
                                 }
                                 @Override
                                 public void onComplete(String filePath) {
-                                    appendMessage(sender + " 发送的文件已下载完成: " + fileName);
+                                    appendMessage(sender + " 发送的文件已下��完成: " + fileName);
                                     JOptionPane.showMessageDialog(SubGroupChatWindow.this, "文件下载完成!\n保存路径: " + filePath);
                                 }
                                 @Override
