@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<messages>
-  <message id="3196" receiver="testgroup" sender="1" timestamp="2025-06-20 19:52:13" type="GROUP">
-    <content>11</content>
-  </message>
-  <message id="3197" receiver="testgroup" sender="3" timestamp="2025-06-20 19:52:30" type="GROUP">
-    <content>33</content>
-  </message>
-</messages>
