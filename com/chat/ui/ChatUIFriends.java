@@ -262,7 +262,7 @@ public class ChatUIFriends implements MessageObserver {
                     win = new PrivateChatWindow(sender);
                     privateChats.put(sender, win);
                 }
-                win.appendImageMessage(sender, fileName, imagePath);
+                win.appendImageMessage(sender, fileName, imagePath); // 调用图片显示
             }
         } else if (message.startsWith("FILE_NOTIFY:")) {
             // 文件通知消息处理
@@ -553,6 +553,7 @@ public class ChatUIFriends implements MessageObserver {
                         int imagePort = 8889; // 与服务端保持一致
                         com.chat.NewFunctions.image.ImageManager.sendImageToServer(serverHost, imagePort, file, friendName, currentUser);
                         appendMessage("[图片已发送: " + file.getName() + "]");
+                        appendImageMessage("我", file.getName(), file.getAbsolutePath()); // 调用图片显示
                     } catch (Exception ex) {
                         appendMessage("[图片发送失败: " + file.getName() + "]");
                         JOptionPane.showMessageDialog(this, "图片发送失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);

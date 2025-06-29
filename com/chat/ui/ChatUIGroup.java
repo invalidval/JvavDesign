@@ -586,7 +586,7 @@ public class ChatUIGroup implements MessageObserver {
             if (!message.isEmpty()) {
                 client.sendMessage("/gs " + groupName + " " + message);
                 // 立即本地显示消息，保证体验一致
-                appendMessage("我: " + message);
+               // appendMessage("我: " + message);
                 saveGroupMessageToLocal(currentUser, message);
                 inputField.setText("");
             }
