@@ -256,13 +256,15 @@ public class ChatUIFriends implements MessageObserver {
                 long fileSize = Long.parseLong(parts[2]);
                 String sender = parts[3];
                 String imagePath = parts[4];
-                saveMessageToLocal(sender, "[图片] " + fileName + " " + imagePath); // 保存图片消息到本地
+                // 本地化存储图片
+                String localImagePath = saveImageToLocal(sender, fileName, imagePath);
+                saveMessageToLocal(sender, "[图片] " + fileName + " " + localImagePath); // 保存图片消息到本地
                 PrivateChatWindow win = privateChats.get(sender);
                 if (win == null || !win.isDisplayable()) {
                     win = new PrivateChatWindow(sender);
                     privateChats.put(sender, win);
                 }
-                win.appendImageMessage(sender, fileName, imagePath);
+                win.appendImageMessage(sender, fileName, localImagePath); // 用本地路径显示
             }
         } else if (message.startsWith("FILE_NOTIFY:")) {
             // 文件通知消息处理
@@ -407,7 +409,30 @@ public class ChatUIFriends implements MessageObserver {
 
             JPanel topPanel = new JPanel(new BorderLayout());
             topPanel.add(new JLabel("与 " + friendName + " 私聊"), BorderLayout.CENTER);
-            topPanel.add(menuButton, BorderLayout.EAST);
+
+            // 新增：我的图片按钮
+            JButton myImagesButton = new JButton("我的图片");
+            myImagesButton.setFocusable(false);
+            myImagesButton.addActionListener(e -> {
+                try {
+                    String userHome = System.getProperty("user.home");
+                    String localDirPath = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "PrivateChat" + File.separator + currentUser + "_to_" + friendName;
+                    File localDir = new File(localDirPath);
+                    if (localDir.exists() && localDir.isDirectory()) {
+                        Desktop.getDesktop().open(localDir);
+                    } else {
+                        JOptionPane.showMessageDialog(this, "图片文件夹不存在！", "提示", JOptionPane.INFORMATION_MESSAGE);
+                    }
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this, "打开图片文件夹失败！", "错误", JOptionPane.ERROR_MESSAGE);
+                }
+            });
+            // topPanel添加我的图片按钮
+            JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+            rightPanel.setOpaque(false);
+            rightPanel.add(myImagesButton);
+            rightPanel.add(menuButton);
+            topPanel.add(rightPanel, BorderLayout.EAST);
 
             chatArea = new JTextPane();
             chatArea.setEditable(false);
@@ -415,6 +440,8 @@ public class ChatUIFriends implements MessageObserver {
 
             // 加载本地聊天记录
             loadLocalChatHistory();
+            // 加载本地图片
+            loadLocalImages();
 
             inputField = new JTextField();
             JButton sendButton = new JButton("发送");
@@ -440,7 +467,7 @@ public class ChatUIFriends implements MessageObserver {
             stopVoiceCallButton.addActionListener(e -> stopVoiceCall());
 
             // ========== 修正底部按钮显示 ==========
-            // 创建底部面板，包含语音按钮和输入区
+            // 创建底部面板，包含语音按���和输入区
             JPanel bottomPanel = new JPanel(new BorderLayout());
             JPanel voicePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
             voicePanel.add(voiceCallButton);
@@ -531,6 +558,21 @@ public class ChatUIFriends implements MessageObserver {
             }
         }
 
+        // 新增：加载本地图片（打开窗口时自动加载）
+        private void loadLocalImages() {
+            String userHome = System.getProperty("user.home");
+            String localDirPath = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "PrivateChat" + File.separator + currentUser + "_to_" + friendName;
+            File localDir = new File(localDirPath);
+            if (localDir.exists() && localDir.isDirectory()) {
+                File[] images = localDir.listFiles((dir, name) -> name.matches(".*\\.(jpg|jpeg|png|gif|bmp)$"));
+                if (images != null) {
+                    for (File img : images) {
+                        appendImageMessage(friendName, img.getName(), img.getAbsolutePath());
+                    }
+                }
+            }
+        }
+
         private void sendMessage() {
             String message = inputField.getText().trim();
             if (!message.isEmpty()) {
@@ -551,8 +593,29 @@ public class ChatUIFriends implements MessageObserver {
                 if (com.chat.NewFunctions.image.ImageManager.isImageFile(file)) {
                     try {
                         int imagePort = 8889; // 与服务端保持一致
-                        com.chat.NewFunctions.image.ImageManager.sendImageToServer(serverHost, imagePort, file, friendName, currentUser);
-                        appendMessage("[图片已发送: " + file.getName() + "]");
+                        // 构造本地图片保存路径
+                        String userHome = System.getProperty("user.home");
+                        String imagesDirPath = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "PrivateChat" + File.separator + currentUser + "_to_" + friendName;
+                        File imagesDir = new File(imagesDirPath);
+                        if (!imagesDir.exists()) imagesDir.mkdirs();
+                        File destFile = new File(imagesDir, file.getName());
+                        int count = 1;
+                        String baseName = file.getName();
+                        String name = baseName;
+                        String ext = "";
+                        int dot = baseName.lastIndexOf('.');
+                        if (dot > 0) {
+                            name = baseName.substring(0, dot);
+                            ext = baseName.substring(dot);
+                        }
+                        while (destFile.exists()) {
+                            destFile = new File(imagesDir, name + "_" + count + ext);
+                            count++;
+                        }
+                        java.nio.file.Files.copy(file.toPath(), destFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        com.chat.NewFunctions.image.ImageManager.sendImageToServer(serverHost, imagePort, destFile, friendName, currentUser);
+                        appendMessage("[图片已发送: " + destFile.getName() + "]");
+                        appendImageMessage("我", destFile.getName(), destFile.getAbsolutePath()); // 调用图片显示
                     } catch (Exception ex) {
                         appendMessage("[图片发送失败: " + file.getName() + "]");
                         JOptionPane.showMessageDialog(this, "图片发送失败: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
@@ -688,7 +751,7 @@ public class ChatUIFriends implements MessageObserver {
                     doc.insertString(doc.getLength(), sender + " 发送了图片: ", null);
                     ImageIcon icon = new ImageIcon(imagePath);
                     if (icon.getIconWidth() <= 0 || icon.getIconHeight() <= 0) {
-                        doc.insertString(doc.getLength(), "[图片加载失败]\n", null);
+                        doc.insertString(doc.getLength(), "[图片加���失败]\n", null);
                         return;
                     }
                     // 动态缩略图最大边长，取chatArea宽度的1/3，���小100，最大300
@@ -825,6 +888,26 @@ public class ChatUIFriends implements MessageObserver {
             } catch (Exception ex) {
                 appendMessage("[语音通话启动失败] " + ex.getMessage());
             }
+        }
+    }
+    // 工具方法：将图片复制到本地目录
+    private String saveImageToLocal(String sender, String fileName, String imagePath) {
+        String userHome = System.getProperty("user.home");
+        String localDirPath = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "PrivateChat" + File.separator + sender + "_to_" + currentUser;
+        File localDir = new File(localDirPath);
+        if (!localDir.exists()) localDir.mkdirs();
+        File src = new File(imagePath);
+        File dest = new File(localDir, fileName);
+        try (InputStream in = new FileInputStream(src); OutputStream out = new FileOutputStream(dest)) {
+            byte[] buf = new byte[4096];
+            int len;
+            while ((len = in.read(buf)) > 0) {
+                out.write(buf, 0, len);
+            }
+            return dest.getAbsolutePath();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return imagePath; // 失败时返回原路径
         }
     }
 }
