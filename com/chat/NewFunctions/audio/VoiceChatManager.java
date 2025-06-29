@@ -207,6 +207,7 @@ public class VoiceChatManager {
 
     public void receivePackets(String sessionId, List<AudioPacket> packets) {
         String canonicalId = getCanonicalSessionId(sessionId);
+
         System.out.println("[LOG] receivePackets called, sessionId=" + sessionId + ", canonicalId=" + canonicalId + ", packets.size=" + (packets == null ? 0 : packets.size()));
         if (!conferenceSessions.containsKey(canonicalId)) {
             System.out.println("[LOG] conferenceSessions 不包含 sessionId: " + canonicalId);
@@ -313,8 +314,8 @@ public class VoiceChatManager {
      * 通过服务器转发音频包（需包含目标sessionId）
      */
     private void sendPacketsToNetwork(String sessionId, List<AudioPacket> packets) {
-        System.out.println("[LOG] sendPacketsToNetwork called, sessionId=" + sessionId + ", packets.size=" + (packets == null ? 0 : packets.size()));
-        System.out.println("[LOG] voiceHost=" + voiceHost + ", voicePort=" + voicePort);
+//        System.out.println("[LOG] sendPacketsToNetwork called, sessionId=" + sessionId + ", packets.size=" + (packets == null ? 0 : packets.size()));
+//        System.out.println("[LOG] voiceHost=" + voiceHost + ", voicePort=" + voicePort);
         // 只通过服务器转发
         if (voiceOut != null && voiceSocket != null && !voiceSocket.isClosed()) {
             try {
@@ -324,7 +325,7 @@ public class VoiceChatManager {
                     voiceOut.writeObject(packets);
                     voiceOut.flush();
                 }
-                System.out.println("[LOG] 数据已发送: sessionId=" + sessionId + ", packets.size=" + packets.size());
+//                System.out.println("[LOG] 数据已发送: sessionId=" + sessionId + ", packets.size=" + packets.size());
             } catch (IOException e) {
                 System.err.println("音频Socket发送失败: " + e.getMessage());
             }
@@ -454,5 +455,12 @@ public class VoiceChatManager {
             return actual;
         }
         return buffer;
+    }
+
+    public Socket getVoiceSocket() {
+        return voiceSocket;
+    }
+    public ObjectOutputStream getVoiceOut() {
+        return voiceOut;
     }
 }
