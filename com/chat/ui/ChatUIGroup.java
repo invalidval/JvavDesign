@@ -61,9 +61,13 @@ public class ChatUIGroup implements MessageObserver {
         JButton joinGroupButton = new JButton("加入群聊"); // 新增按钮
         joinGroupButton.addActionListener(e -> showJoinGroupDialog()); // 绑定加入群聊逻辑
 
+        JButton myImagesButton = new JButton("我的图片"); // 新增“我的图片”按钮
+        myImagesButton.addActionListener(e -> openMyImagesFolder()); // 绑定事件
+
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         buttonPanel.add(createGroupButton);
         buttonPanel.add(joinGroupButton); // 添加加入群聊按钮
+        buttonPanel.add(myImagesButton); // 添加“我的图片”按钮
 
         groupPanel.add(scrollPane, BorderLayout.CENTER);
         groupPanel.add(buttonPanel, BorderLayout.SOUTH);
@@ -456,7 +460,7 @@ public class ChatUIGroup implements MessageObserver {
         // 新增：图片消息offset映射（offset -> imagePath）
         private final Map<Integer, String> imageOffsetMap = new HashMap<>();
         private boolean imageMouseListenerAdded = false;
-        // 新增：语音通话相关UI���件
+        // 新��：语音通话相关UI���件
         private JButton voiceCallButton;
         private JButton stopVoiceCallButton;
         private boolean isVoiceCalling = false;
@@ -598,6 +602,11 @@ public class ChatUIGroup implements MessageObserver {
 
             // 修改底部面板添加方式
             add(bottomPanel, BorderLayout.SOUTH);
+
+            // 新增“我的图片”按钮，群聊窗口专用，打开本群图片保存路径
+            JButton myImagesButton = new JButton("我的图片");
+            myImagesButton.addActionListener(e -> openGroupImagesFolder());
+            buttonPanel.add(myImagesButton);
 
             // 窗口关闭时清理资源
             addWindowListener(new WindowAdapter() {
@@ -861,6 +870,21 @@ public class ChatUIGroup implements MessageObserver {
                 }
             }
         }
+        private void openGroupImagesFolder() {
+            try {
+                String userHome = System.getProperty("user.home");
+                String imagesDirPath = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "GroupsImage" + File.separator + currentUser + "_to_" + groupName;
+                File imagesDir = new File(imagesDirPath);
+                if (!imagesDir.exists() || !imagesDir.isDirectory()) {
+                    JOptionPane.showMessageDialog(parentFrame, "未找到图片文件夹: " + imagesDirPath, "文件夹不存在", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                Desktop.getDesktop().open(imagesDir);
+            } catch (Exception e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(parentFrame, "打开文件夹时发生错误: " + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }
 
     // 新增：获取小组UI面板（如需嵌入主界面）
@@ -903,7 +927,7 @@ public class ChatUIGroup implements MessageObserver {
                 }
                 win.setVisible(true);
                 win.toFront();
-                // 清空原有内容，准备加载历史
+                // 清空原有内��，准备加载历史
                 win.chatArea.setText("");
             }
             return;
@@ -1156,4 +1180,24 @@ public class ChatUIGroup implements MessageObserver {
         }
         return openCount;
     }
+
+    // 新增：打开“我的图片”文件夹
+    private void openMyImagesFolder() {
+        try {
+            String userHome = System.getProperty("user.home");
+            String imagesDirPath = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "GroupsImage" + File.separator + currentUser + "_to_";
+            File imagesDir = new File(imagesDirPath);
+            if (!imagesDir.exists() || !imagesDir.isDirectory()) {
+                JOptionPane.showMessageDialog(parentFrame, "未找到图片文件夹: " + imagesDirPath, "文件夹不存在", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            Desktop.getDesktop().open(imagesDir);
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(parentFrame, "打开文件夹时发生错误: " + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    // 新增：打开本群图片保存路径
+
 }

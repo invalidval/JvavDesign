@@ -172,6 +172,11 @@ public class SubGroupUI {
             buttonPanel.add(fileButton);
             buttonPanel.add(historyButton);
 
+            // 新增“我的图片”按钮
+            JButton myImagesButton = new JButton("我的图片");
+            myImagesButton.addActionListener(e -> openMySubGroupImagesFolder()); // 绑定事件
+            buttonPanel.add(myImagesButton); // 添加到按钮面板
+
             JPanel bottomPanel = new JPanel(new BorderLayout());
             bottomPanel.add(voicePanel, BorderLayout.NORTH);
             bottomPanel.add(buttonPanel, BorderLayout.CENTER);
@@ -379,6 +384,22 @@ public class SubGroupUI {
                 }
             });
         }
+        private void openMySubGroupImagesFolder() {
+            try {
+                String userHome = System.getProperty("user.home");
+                // 子群图片保存路径应与发送图片时一致
+                String imagesDirPath = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "SubGroupsImage" + File.separator + currentUser + "_to_" + groupName + "#" + subGroupId;
+                File imagesDir = new File(imagesDirPath);
+                if (!imagesDir.exists() || !imagesDir.isDirectory()) {
+                    JOptionPane.showMessageDialog(parentFrame, "未找到图片文件夹: " + imagesDirPath, "文件夹不存在", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                Desktop.getDesktop().open(imagesDir);
+            } catch (Exception e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(parentFrame, "打开文件夹时发生错误: " + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+            }
+        }
         // 加载本���小组聊天历史
         private void loadLocalSubGroupChatHistory() {
             String fileName = "chat_subgroup_" + groupName + "_" + subGroupId + ".txt";
@@ -472,7 +493,7 @@ public class SubGroupUI {
         System.out.println("[SubGroupUI] showSubGroupDialog called, groupName=" + groupName);
         lastSGListGroupName = groupName;
         client.sendMessage("/sg_list " + groupName);
-        // 若已存在dialog则先关闭
+        // 若已存��dialog则先关闭
         JDialog oldDialog = groupSubGroupDialogMap.get(groupName);
         if (oldDialog != null) {
             oldDialog.dispose();
@@ -686,4 +707,7 @@ public class SubGroupUI {
         subGroupListPanel.revalidate();
         subGroupListPanel.repaint();
     }
+
+    // 新增：打开“我的图片”文件夹（子群专用��
+
 }

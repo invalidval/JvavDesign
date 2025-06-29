@@ -409,7 +409,30 @@ public class ChatUIFriends implements MessageObserver {
 
             JPanel topPanel = new JPanel(new BorderLayout());
             topPanel.add(new JLabel("与 " + friendName + " 私聊"), BorderLayout.CENTER);
-            topPanel.add(menuButton, BorderLayout.EAST);
+
+            // 新增：我的图片按钮
+            JButton myImagesButton = new JButton("我的图片");
+            myImagesButton.setFocusable(false);
+            myImagesButton.addActionListener(e -> {
+                try {
+                    String userHome = System.getProperty("user.home");
+                    String localDirPath = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "PrivateChat" + File.separator + currentUser + "_to_" + friendName;
+                    File localDir = new File(localDirPath);
+                    if (localDir.exists() && localDir.isDirectory()) {
+                        Desktop.getDesktop().open(localDir);
+                    } else {
+                        JOptionPane.showMessageDialog(this, "图片文件夹不存在！", "提示", JOptionPane.INFORMATION_MESSAGE);
+                    }
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this, "打开图片文件夹失败！", "错误", JOptionPane.ERROR_MESSAGE);
+                }
+            });
+            // topPanel添加我的图片按钮
+            JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+            rightPanel.setOpaque(false);
+            rightPanel.add(myImagesButton);
+            rightPanel.add(menuButton);
+            topPanel.add(rightPanel, BorderLayout.EAST);
 
             chatArea = new JTextPane();
             chatArea.setEditable(false);
