@@ -1557,7 +1557,7 @@ public class ClientHandler extends Thread implements UserObserver {
 
                             String sessionId = str;
                             List<com.chat.NewFunctions.audio.AudioPacket> packets = (List<com.chat.NewFunctions.audio.AudioPacket>) in.readObject();
-                            // 本地播放
+//                             本地播放
 //                            for (com.chat.NewFunctions.audio.AudioPacket packet : packets) {
 //                                playPcm(packet.getData());
 //                            }

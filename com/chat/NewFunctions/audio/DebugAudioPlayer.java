@@ -37,8 +37,16 @@ public class DebugAudioPlayer {
     public static void playPcm(byte[] pcm) {
         if (debugSpeakerLine == null) initDebugSpeaker();
         if (debugSpeakerLine != null && pcm != null && pcm.length > 0) {
-            int validLen = pcm.length - (pcm.length % 2); // 2字节对齐
-            debugSpeakerLine.write(pcm, 0, validLen);
+            // 4字节对齐（frameSize=4，16bit立体声）
+            int frameSize = 4;
+            int validLen = pcm.length - (pcm.length % frameSize);
+            if (validLen != pcm.length) {
+                byte[] padded = new byte[validLen + frameSize];
+                System.arraycopy(pcm, 0, padded, 0, pcm.length);
+                for (int i = pcm.length; i < padded.length; i++) padded[i] = 0;
+                pcm = padded;
+            }
+            debugSpeakerLine.write(pcm, 0, pcm.length);
         }
     }
 
@@ -50,4 +58,3 @@ public class DebugAudioPlayer {
         }
     }
 }
-

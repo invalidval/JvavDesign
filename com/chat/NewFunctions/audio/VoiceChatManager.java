@@ -134,6 +134,7 @@ public class VoiceChatManager {
         System.out.println("[LOG] startSession called, sessionId=" + sessionId);
         if (!isRunning.get()) {
             isRunning.set(true);
+            initMicrophone(); // 只在这里初始化一次
             startAudioCapture();
         }
     }
@@ -154,18 +155,15 @@ public class VoiceChatManager {
      * 开始音频捕获线程
      */
     private void startAudioCapture() {
+        System.out.println("[LOG] startAudioCapture called");
         executorService.submit(() -> {
-            microphone.start();
-            byte[] buffer = new byte[AUDIO_BUFFER_SIZE];
-
             while (isRunning.get()) {
-                int bytesRead = microphone.read(buffer, 0, buffer.length);
-                if (bytesRead > 0) {
-                    processAndSendAudio(Arrays.copyOf(buffer, bytesRead));
+                byte[] buffer = captureAudio(AUDIO_BUFFER_SIZE);
+                if (buffer.length > 0) {
+                    processAndSendAudio(buffer);
                 }
             }
-
-            microphone.stop();
+            if (microphone != null) microphone.stop();
         });
     }
 
@@ -409,4 +407,52 @@ public class VoiceChatManager {
         }
     }
 
+    /**
+     * 初始化麦克风采集（44100Hz, 16bit, 2声道，frameSize=4）
+     */
+    public void initMicrophone() {
+        try {
+            // 如果microphone为null或已关闭，才重新初始化
+            if (microphone != null) {
+                if (!microphone.isOpen() || !microphone.isActive()) {
+                    try { microphone.close(); } catch (Exception ignore) {}
+                    microphone = null;
+                } else {
+                    return;
+                }
+            }
+            AudioFormat format = new AudioFormat(44100.0f, 16, 2, true, false);
+            microphone = AudioSystem.getTargetDataLine(format);
+            microphone.open(format);
+            microphone.start();
+            System.out.println("[LOG] 麦克风初始化成功: " + format);
+        } catch (Exception e) {
+            System.err.println("[LOG] 麦克风初始化失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 采集音频数据
+     * @param bufferSize 采集缓冲区大小（建议为4的倍数）
+     * @return 采集到的音频数据
+     */
+    public byte[] captureAudio(int bufferSize) {
+        if (microphone == null) {
+            initMicrophone();
+        }
+        if (microphone == null || !microphone.isOpen()) {
+            System.err.println("[LOG] 麦克风未打开，无法采集音频");
+            try { Thread.sleep(100); } catch (InterruptedException ignored) {}
+            return new byte[0];
+        }
+        byte[] buffer = new byte[bufferSize];
+        int bytesRead = microphone.read(buffer, 0, buffer.length);
+        if (bytesRead <= 0) return new byte[0];
+        if (bytesRead < buffer.length) {
+            byte[] actual = new byte[bytesRead];
+            System.arraycopy(buffer, 0, actual, 0, bytesRead);
+            return actual;
+        }
+        return buffer;
+    }
 }
