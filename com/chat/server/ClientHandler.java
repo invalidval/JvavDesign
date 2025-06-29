@@ -778,311 +778,6 @@ public class ClientHandler extends Thread implements UserObserver {
             }
         }
     }
-    /*public static class VoiceChatHandler implements MessageHandlerStrategy {
-        private final VoiceChatManager voiceManager;
-        private  Packetizer packetizer;
-        private final Map<String, SessionContext> activeSessions;
-
-        public VoiceChatHandler(VoiceChatManager voiceManager) {
-            this.voiceManager = voiceManager;
-            this.activeSessions = new ConcurrentHashMap<>();
-        }
-
-        @Override
-        public void handle(String message, ClientHandler clientHandler) {
-            String[] parts = message.split(" ");
-            if (parts.length < 2) {
-                clientHandler.send("SYSTEM: 无效语音命令格式");
-                return;
-            }
-
-            String command = parts[0];
-            String subCommand = parts[1];
-
-            try {
-                switch (command + " " + subCommand) {
-                    case "/VOICE START":
-                        handleStart(clientHandler, parts);
-                        break;
-                    case "/VOICE ACCEPT":
-                        handleAccept(clientHandler, parts);
-                        break;
-                    case "/VOICE REJECT":
-                        handleReject(clientHandler, parts);
-                        break;
-                    case "/VOICE END":
-                        handleEnd(clientHandler, parts);
-                        break;
-                    case "/VOICE DATA":
-                        handleData(clientHandler, parts);
-                        break;
-                    default:
-                        clientHandler.send("SYSTEM: 未知语音命令");
-                }
-            } catch (Exception e) {
-                clientHandler.send("SYSTEM: 语音处理错误: " + e.getMessage());
-            }
-        }
-
-        private void handleStart(ClientHandler handler, String[] parts) {
-            if (parts.length < 4) {
-                handler.send("SYSTEM: 参数不足");
-                return;
-            }
-
-            String sessionType = parts[2];
-            String target = parts[3];
-            String sessionId = generateSessionId(handler.username, target, sessionType);
-
-            if (voiceManager.isSessionActive(sessionId)) {
-                handler.send("SYSTEM: 会话已存在");
-                return;
-            }
-
-            // 初始化语音会话
-            try {
-                voiceManager.initAudioDevices();
-                voiceManager.startSession(sessionId);
-
-                // 保存会话上下文
-                activeSessions.put(sessionId, new SessionContext(
-                        sessionType,
-                        handler.username,
-                        target
-                ));
-
-                // 发送邀请
-                if ("PRIVATE".equals(sessionType)) {
-                    sendPrivateInvite(handler, target, sessionId);
-                } else {
-                    sendGroupInvite(handler, target, sessionId);
-                }
-            } catch (Exception e) {
-                handler.send("SYSTEM: 语音初始��失败: " + e.getMessage());
-            }
-        }
-        private void handleReject(ClientHandler handler, String[] parts) {
-            if (parts.length < 3) {
-                handler.send("SYSTEM: 参数不足，格式应为: /VOICE REJECT [sessionId]");
-                return;
-            }
-
-            String sessionId = parts[2];
-            SessionContext context = activeSessions.get(sessionId);
-
-            if (context == null) {
-                handler.send("SYSTEM: 无效的会话ID");
-                return;
-            }
-
-            // 通知发起方
-            ClientHandler initiator = Server.getClientHandler(context.initiator);
-            if (initiator != null) {
-                initiator.send(String.format(
-                        "/VOICE REJECTED %s %s",
-                        handler.username,
-                        sessionId
-                ));
-            }
-
-            // 如果是私聊，直接结束会话
-            if ("PRIVATE".equals(context.sessionType)) {
-                voiceManager.stopSession(sessionId);
-                activeSessions.remove(sessionId);
-            }
-
-            handler.send("SYSTEM: 已拒绝语音请求");
-        }
-
-        *//**
-         * 在SessionContext类中添加状��跟踪
-         *//*
-        private static class SessionContext {
-            final String sessionType;
-            final String initiator;
-            final String target;
-            VoiceChatManager.SessionState state; // 使用VoiceChatManager中���枚举
-
-            SessionContext(String sessionType, String initiator, String target) {
-                this.sessionType = sessionType;
-                this.initiator = initiator;
-                this.target = target;
-                this.state = VoiceChatManager.SessionState.PENDING;
-            }
-        }
-        private void sendPrivateInvite(ClientHandler sender, String receiver, String sessionId) {
-            ClientHandler target = Server.getClientHandler(receiver);
-            if (target != null) {
-                target.send(String.format(
-                        "/VOICE INVITE PRIVATE %s %s",
-                        sender.username,
-                        sessionId
-                ));
-                sender.send("SYSTEM: 私聊邀请已发送");
-            } else {
-                sender.send("SYSTEM: 用户不在线");
-            }
-        }
-
-        private void sendGroupInvite(ClientHandler sender, String groupId, String sessionId) {
-            Set<String> members = GroupDatabase.getGroupMembers(groupId);
-            if (members != null) {
-                members.stream()
-                        .filter(m -> !m.equals(sender.username))
-                        .map(Server::getClientHandler)
-                        .filter(Objects::nonNull)
-                        .forEach(handler -> handler.send(String.format(
-                                "/VOICE INVITE GROUP %s %s %s",
-                                sender.username,
-                                groupId,
-                                sessionId
-                        )));
-                sender.send("SYSTEM: 群聊邀请已发送");
-            }
-        }
-
-        private void handleAccept(ClientHandler handler, String[] parts) {
-            if (parts.length < 3) {
-                handler.send("SYSTEM: 参数不足");
-                return;
-            }
-
-            String sessionId = parts[2];
-            SessionContext context = activeSessions.get(sessionId);
-
-            if (context == null) {
-                handler.send("SYSTEM: 无效会话ID");
-                return;
-            }
-
-            // 建立语音连接
-            try {
-                if ("PRIVATE".equals(context.sessionType)) {
-                    setupPrivateConnection(handler, context, sessionId);
-                } else {
-                    setupGroupConnection(handler, context, sessionId);
-                }
-            } catch (Exception e) {
-                handler.send("SYSTEM: 连接建立失败: " + e.getMessage());
-            }
-        }
-
-        private void setupPrivateConnection(ClientHandler handler,
-                                            SessionContext context,
-                                            String sessionId) {
-            // 通知发起方
-            ClientHandler initiator = Server.getClientHandler(context.initiator);
-            if (initiator != null) {
-                initiator.send(String.format(
-                        "/VOICE ACCEPTED %s %s",
-                        handler.username,
-                        sessionId
-                ));
-            }
-
-            handler.send("SYSTEM: 私聊语音已连接");
-        }
-
-        private void setupGroupConnection(ClientHandler handler,
-                                          SessionContext context,
-                                          String sessionId) {
-            try {
-                // 1. 启动群聊会话
-                voiceManager.startGroupSession(sessionId);
-
-                // 2. 添加当前用户
-                voiceManager.addParticipant(sessionId, handler.username);
-
-                // 3. 更新状态
-                context.state = VoiceChatManager.SessionState.ACTIVE;
-
-                // 4. 通知群成员
-                notifyGroupMembers(handler, context, sessionId);
-
-            } catch (Exception e) {
-                handler.send("SYSTEM: 加入群聊失败: " + e.getMessage());
-                voiceManager.stopSession(sessionId);
-            }
-        }
-
-        private void notifyGroupMembers(ClientHandler handler,
-                                        SessionContext context,
-                                        String sessionId) {
-            Set<String> members = GroupDatabase.getGroupMembers(context.target);
-            if (members != null) {
-                String notification = String.format(
-                        "/VOICE MEMBER_JOINED %s %s",
-                        handler.username,
-                        sessionId
-                );
-
-                members.stream()
-                        .filter(m -> !m.equals(handler.username))
-                        .map(Server::getClientHandler)
-                        .filter(Objects::nonNull)
-                        .forEach(client -> client.send(notification));
-            }
-        }
-        private void handleData(ClientHandler handler, String[] parts) throws Exception {
-            if (parts.length < 4) {
-                return;
-            }
-
-            String sessionId = parts[2];
-            String base64Data = parts[3];
-
-            // Base64解码字符串到字节数组
-            byte[] encodedBytes = Base64.getDecoder().decode(base64Data);
-
-            // 使用AudioDecoder解码
-            byte[] pcmData = voiceManager.encoder.decodeAudio(encodedBytes);
-            // 通过VoiceManager处理音频数据
-            voiceManager.receivePackets(sessionId,
-                    Packetizer.depacketize(pcmData));
-        }
-
-        private void handleEnd(ClientHandler handler, String[] parts) {
-            if (parts.length < 3) {
-                handler.send("SYSTEM: 参数不足");
-                return;
-            }
-
-            String sessionId = parts[2];
-            voiceManager.stopSession(sessionId);
-            activeSessions.remove(sessionId);
-
-            // 通知其他参��者
-            SessionContext context = activeSessions.get(sessionId);
-            if (context != null) {
-                notifyParticipants(sessionId, context, handler.username);
-            }
-
-            handler.send("SYSTEM: 语音会话已结束");
-        }
-
-        private void notifyParticipants(String sessionId,
-                                        SessionContext context,
-                                        String sender) {
-            if ("PRIVATE".equals(context.sessionType)) {
-                ClientHandler target = Server.getClientHandler(context.target);
-                if (target != null) {
-                    target.send(String.format(
-                            "/VOICE ENDED %s %s",
-                            sender,
-                            sessionId
-                    ));
-                }
-            } else {
-                // 群聊通知逻辑
-            }
-        }
-
-        private String generateSessionId(String user1, String user2, String type) {
-            return type + "-" + user1 + "-" + user2 + "-" + System.currentTimeMillis();
-        }
-
-
-    }*/
     // 新增：图片接收与转发处理
     class ImageReceiveHandler implements MessageHandlerStrategy {
         @Override
@@ -1487,6 +1182,9 @@ public class ClientHandler extends Thread implements UserObserver {
         private ObjectOutputStream out;
         private String username;
         private volatile boolean running = true;
+        // 新增：群聊语音会话管理
+        private static final Map<String, Set<VoiceSocketHandler>> groupVoiceSessions = new ConcurrentHashMap<>();
+        private static final Map<String, String> groupVoiceStarter = new ConcurrentHashMap<>(); // 记录发起方
 
         public VoiceSocketHandler(Socket socket) {
             this.voiceSocket = socket;
@@ -1501,20 +1199,88 @@ public class ClientHandler extends Thread implements UserObserver {
             try {
                 out = new ObjectOutputStream(voiceSocket.getOutputStream());
                 in = new ObjectInputStream(voiceSocket.getInputStream());
-                // 第一个包要求客户端先发送用户名
+                // 第一个包要求客户端先发送用户名或sessionId
                 Object first = in.readObject();
                 if (!(first instanceof String)) {
                     voiceSocket.close();
                     return;
                 }
                 String got_sessionId = (String) first;
+                // 新增：支持群聊sessionId（如 group_群名）
+                if (got_sessionId.startsWith("group_")) {
+                    String groupName = got_sessionId.substring(6);
+                    username = null;
+                    // 客户端需随后发送用户名
+                    Object userObj = in.readObject();
+                    if (userObj instanceof String) {
+                        username = (String) userObj;
+                    } else {
+                        voiceSocket.close();
+                        return;
+                    }
+                    // 注册到群聊语音会话
+                    groupVoiceSessions.putIfAbsent(groupName, ConcurrentHashMap.newKeySet());
+                    Set<VoiceSocketHandler> session = groupVoiceSessions.get(groupName);
+                    session.add(this);
+                    // 记录发起方
+                    if (!groupVoiceStarter.containsKey(groupName)) {
+                        groupVoiceStarter.put(groupName, username);
+                    }
+                    System.out.println("[VoiceSocket] 用户 " + username + " 加入群聊语音 " + groupName);
+                    // 语音转发循环
+                    while (running && !voiceSocket.isClosed()) {
+                        Object obj = null;
+                        try {
+                            obj = in.readObject();
+                        } catch (EOFException eof) {
+                            break;
+                        }
+                        if (obj == null) continue;
+                        if (obj instanceof String) {
+                            String str = (String) obj;
+                            if (str.startsWith("/group_voice_exit")) {
+                                // 普通成员退出
+                                session.remove(this);
+                                sendCommand("SUCCESS: 已退出群聊语音");
+                                break;
+                            } else if (str.startsWith("/group_voice_end")) {
+                                // 发起方结束
+                                if (username.equals(groupVoiceStarter.get(groupName))) {
+                                    for (VoiceSocketHandler handler : session) {
+                                        if (handler != this) handler.sendCommand("GROUP_VOICE_ENDED");
+                                    }
+                                    session.clear();
+                                    groupVoiceSessions.remove(groupName);
+                                    groupVoiceStarter.remove(groupName);
+                                    sendCommand("SUCCESS: 已结束群聊语音");
+                                }
+                                break;
+                            }
+                        } else if (obj instanceof List) {
+                            // 音频包，转发给所有同群成员
+                            List<com.chat.NewFunctions.audio.AudioPacket> packets = (List<com.chat.NewFunctions.audio.AudioPacket>) obj;
+                            for (VoiceSocketHandler handler : session) {
+                                if (handler != this) {
+                                    handler.sendAudio("group_" + groupName, packets);
+                                }
+                            }
+                        }
+                    }
+                    // 退出清理
+                    session.remove(this);
+                    if (session.isEmpty()) {
+                        groupVoiceSessions.remove(groupName);
+                        groupVoiceStarter.remove(groupName);
+                    }
+                    return;
+                }
+                // ...existing code for 1v1 ...
                 String[] users = got_sessionId.split("_to_");
                 if (users.length != 2) {
                     voiceSocket.close();
                     return;
                 }
                 username = users[0];
-
                 Server.registerVoiceClient(username, this);
                 System.out.println("[VoiceSocket] 用户 " + username + " 语音socket已注册");
                 while (running && !voiceSocket.isClosed()) {
