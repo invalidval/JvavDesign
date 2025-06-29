@@ -192,15 +192,31 @@ public class VoiceChatManager {
     /**
      * 接收网络音频数据包
      */
+    private String getCanonicalSessionId(String sessionId) {
+        if (conferenceSessions.containsKey(sessionId)) {
+            return sessionId;
+        }
+        // 尝试反转 sessionId
+        String[] parts = sessionId.split("_to_");
+        if (parts.length == 2) {
+            String reversed = parts[1] + "_to_" + parts[0];
+            if (conferenceSessions.containsKey(reversed)) {
+                return reversed;
+            }
+        }
+        return sessionId; // 默认返回原始
+    }
+
     public void receivePackets(String sessionId, List<AudioPacket> packets) {
-        System.out.println("[LOG] receivePackets called, sessionId=" + sessionId + ", packets.size=" + (packets == null ? 0 : packets.size()));
-        if (!conferenceSessions.containsKey(sessionId)) {
-            System.out.println("[LOG] conferenceSessions 不包含 sessionId: " + sessionId);
-            startSession(sessionId);
+        String canonicalId = getCanonicalSessionId(sessionId);
+        System.out.println("[LOG] receivePackets called, sessionId=" + sessionId + ", canonicalId=" + canonicalId + ", packets.size=" + (packets == null ? 0 : packets.size()));
+        if (!conferenceSessions.containsKey(canonicalId)) {
+            System.out.println("[LOG] conferenceSessions 不包含 sessionId: " + canonicalId);
+            startSession(canonicalId);
             return;
         }
-        conferenceSessions.get(sessionId).addAll(packets);
-        processReceivedAudio(sessionId);
+        conferenceSessions.get(canonicalId).addAll(packets);
+        processReceivedAudio(canonicalId);
     }
 
     /**
