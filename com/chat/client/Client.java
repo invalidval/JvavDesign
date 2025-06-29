@@ -11,11 +11,13 @@ public class Client implements MessageSubject {
     private DataOutputStream out; // 使用DataOutputStream
     private List<MessageObserver> observers = new CopyOnWriteArrayList<>();
     private volatile boolean listening = false;
+    private String host; // 新增字段，保存服务器host
 
     private Thread listenThread;
     private static final List<Client> allClients = new CopyOnWriteArrayList<>();
 
     public Client(String host, int port) throws IOException {
+        this.host = host;
         this.socket = new Socket(host, port);
         // 使用DataInputStream和DataOutputStream
         this.in = new DataInputStream(socket.getInputStream());
@@ -51,12 +53,6 @@ public class Client implements MessageSubject {
         return in.readUTF(); // 使用readUTF
     }
 
-    public void close() throws IOException {
-        listening = false;
-        if (in != null) in.close();
-        if (out != null) out.close();
-        if (socket != null) socket.close();
-    }
 
     public void addObserver(MessageObserver observer) {
         observers.add(observer);
@@ -68,7 +64,9 @@ public class Client implements MessageSubject {
 
     public void notifyObservers(String message) {
         for (MessageObserver observer : observers) {
-            observer.onMessageReceived(message);
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                observer.onMessageReceived(message);
+            });
         }
     }
 
@@ -82,11 +80,7 @@ public class Client implements MessageSubject {
                     String serverMessage = receiveMessage();
                     if (serverMessage == null) break;
                     final String msg = serverMessage;
-                    for (MessageObserver observer : observers) {
-                        javax.swing.SwingUtilities.invokeLater(() -> {
-                            observer.onMessageReceived(msg);
-                        });
-                    }
+                    notifyObservers(msg);
                 }
             } catch (IOException e) {
                 // 可在UI层处理断开
@@ -111,11 +105,16 @@ public class Client implements MessageSubject {
                 // 关闭流会连锁关闭socket
                 if (out != null) out.close();
                 if (in != null) in.close();
+                socket.close();
             }
         } catch (IOException e) {
             // 处理关闭套接字时的异常
             e.printStackTrace();
         }
+    }
+
+    public String getHost() {
+        return host;
     }
 }
 

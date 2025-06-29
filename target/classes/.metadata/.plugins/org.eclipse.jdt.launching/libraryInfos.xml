@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<libraryInfos>
+    <libraryInfo home="D:\Java\jdk1.8.0_241" version="1.8.0_241">
+        <bootpath>
+            <entry path="D:\Java\jdk1.8.0_241\jre\lib\resources.jar"/>
+            <entry path="D:\Java\jdk1.8.0_241\jre\lib\rt.jar"/>
+            <entry path="D:\Java\jdk1.8.0_241\jre\lib\sunrsasign.jar"/>
+            <entry path="D:\Java\jdk1.8.0_241\jre\lib\jsse.jar"/>
+            <entry path="D:\Java\jdk1.8.0_241\jre\lib\jce.jar"/>
+            <entry path="D:\Java\jdk1.8.0_241\jre\lib\charsets.jar"/>
+            <entry path="D:\Java\jdk1.8.0_241\jre\lib\jfr.jar"/>
+            <entry path="D:\Java\jdk1.8.0_241\jre\classes"/>
+        </bootpath>
+        <extensionDirs>
+            <entry path="D:\Java\jdk1.8.0_241\jre\lib\ext"/>
+            <entry path="C:\WINDOWS\Sun\Java\lib\ext"/>
+        </extensionDirs>
+        <endorsedDirs>
+            <entry path="D:\Java\jdk1.8.0_241\jre\lib\endorsed"/>
+        </endorsedDirs>
+    </libraryInfo>
+    <libraryInfo home="E:\Eclipse\eclipse-jee-2025-03-R-win32-x86_64\eclipse\plugins\org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_21.0.6.v20250130-0529" version="21.0.6">
+        <bootpath>
+            <entry path="null"/>
+        </bootpath>
+        <extensionDirs>
+            <entry path="null"/>
+        </extensionDirs>
+        <endorsedDirs>
+            <entry path="null"/>
+        </endorsedDirs>
+    </libraryInfo>
+    <libraryInfo home="E:\Eclipse\eclipse-jee-2025-03-R-win32-x86_64\eclipse\plugins\org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_21.0.6.v20250130-0529\jre" version="21.0.6"/>
+</libraryInfos>

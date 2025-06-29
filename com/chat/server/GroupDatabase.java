@@ -87,7 +87,30 @@ public class GroupDatabase {
                     User user = UserDatabase.getUser(memberName);
                     if (user != null) {
                         group.addMember(user);
+                    }
                 }
+                // 加载子群信息
+                NodeList subGroupNodes = groupElem.getElementsByTagName("subgroup");
+                for (int k = 0; k < subGroupNodes.getLength(); k++) {
+                    Element sgElem = (Element) subGroupNodes.item(k);
+                    String sgId = sgElem.getAttribute("id");
+                    String sgName = sgElem.getAttribute("name");
+                    Set<String> sgMembers = new HashSet<>();
+                    NodeList sgMemberNodes = sgElem.getElementsByTagName("sgmember");
+                    for (int m = 0; m < sgMemberNodes.getLength(); m++) {
+                        Element sgMemberElem = (Element) sgMemberNodes.item(m);
+                        String sgMemberName = sgMemberElem.getTextContent();
+                        sgMembers.add(sgMemberName);
+                    }
+                    // 构造SubGroup对象（带id）
+                    com.chat.NewFunctions.subgroup.SubGroup sg = new com.chat.NewFunctions.subgroup.SubGroup(sgName, groupName, sgMembers);
+                    // 反射设置id（兼容UUID）
+                    try {
+                        java.lang.reflect.Field idField = sg.getClass().getDeclaredField("id");
+                        idField.setAccessible(true);
+                        idField.set(sg, sgId);
+                    } catch (Exception ignore) {}
+                    group.addSubGroup(sg);
                 }
                 groups.put(groupName, group);
             }
@@ -96,7 +119,7 @@ public class GroupDatabase {
         }
     }
 
-    private static void saveGroupsToFile() {
+    public static void saveGroupsToFile() {
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             DocumentBuilder builder = factory.newDocumentBuilder();
@@ -108,8 +131,20 @@ public class GroupDatabase {
                 groupElem.setAttribute("name", group.getName());
                 for (User member : group.getMembers()) {
                     Element memberElem = doc.createElement("member");
-                    memberElem.setTextContent(member.getName()); // 修正为 getName
+                    memberElem.setTextContent(member.getName());
                     groupElem.appendChild(memberElem);
+                }
+                // 保存子群��息
+                for (com.chat.NewFunctions.subgroup.SubGroup sg : group.getSubGroups()) {
+                    Element sgElem = doc.createElement("subgroup");
+                    sgElem.setAttribute("id", sg.getId());
+                    sgElem.setAttribute("name", sg.getName());
+                    for (String sgMember : sg.getMembers()) {
+                        Element sgMemberElem = doc.createElement("sgmember");
+                        sgMemberElem.setTextContent(sgMember);
+                        sgElem.appendChild(sgMemberElem);
+                    }
+                    groupElem.appendChild(sgElem);
                 }
                 root.appendChild(groupElem);
             }

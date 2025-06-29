@@ -45,10 +45,9 @@ public class MessageStorage {
     /**
      * 保存消息到存储
      */
-    public static void saveMessage(String sender, String receiver, String content, MessageType type) {
+    public static void saveMessage(String sender, String receiver, String content, MessageType type, String... extra) {
         if (!initialized)
             initialize();
-
         StoredMessage message = new StoredMessage(
                 messageIdCounter.getAndIncrement(),
                 sender,
@@ -56,23 +55,87 @@ public class MessageStorage {
                 content,
                 type,
                 LocalDateTime.now());
-
-        // 添加到缓存
         addToCache(message);
-
-        // 保存到文件
         if (type == MessageType.GROUP && receiver != null) {
-            // 指定群聊消息，保存到群聊专用文件
             saveGroupMessageToFile(receiver, message);
         } else if (type == MessageType.PRIVATE) {
-            // 私聊消息，保存到私聊文件
             savePrivateMessageToFile(message);
+        } else if (type == MessageType.SUBGROUP && extra.length >= 2) {
+            // extra[0]=groupName, extra[1]=subGroupId
+            saveSubGroupMessageToFile(extra[0], extra[1], message);
         } else {
-            // 公共聊天消息，保存到公共文件
             savePublicMessageToFile(message);
         }
-
         System.out.println("消息已保存: " + sender + " -> " + (receiver != null ? receiver : "群聊") + ": " + content);
+    }
+
+    // 保存小组消息到文件
+    private static void saveSubGroupMessageToFile(String groupName, String subGroupId, StoredMessage message) {
+        String fileName = "group_" + groupName + "_subgroup_" + subGroupId + ".xml";
+        try {
+            File file = new File(fileName);
+            Document doc;
+            Element root;
+            if (file.exists()) {
+                DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+                DocumentBuilder builder = factory.newDocumentBuilder();
+                doc = builder.parse(file);
+                root = doc.getDocumentElement();
+            } else {
+                DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+                DocumentBuilder builder = factory.newDocumentBuilder();
+                doc = builder.newDocument();
+                root = doc.createElement("messages");
+                doc.appendChild(root);
+            }
+            Element msgElem = doc.createElement("message");
+            msgElem.setAttribute("id", String.valueOf(message.getId()));
+            msgElem.setAttribute("sender", message.getSender());
+            msgElem.setAttribute("receiver", message.getReceiver());
+            msgElem.setAttribute("type", message.getType().name());
+            msgElem.setAttribute("timestamp", message.getTimestamp().format(TIMESTAMP_FORMAT));
+            msgElem.setTextContent(message.getContent());
+            root.appendChild(msgElem);
+            TransformerFactory tf = TransformerFactory.newInstance();
+            Transformer transformer = tf.newTransformer();
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+            transformer.transform(new DOMSource(doc), new StreamResult(file));
+        } catch (Exception e) {
+            System.out.println("小组消息保存失败: " + e.getMessage());
+        }
+    }
+
+    // 查询小组历史消息
+    public static List<StoredMessage> getSubGroupMessages(String groupName, String subGroupId, int limit) {
+        List<StoredMessage> result = new ArrayList<>();
+        String fileName = "group_" + groupName + "_subgroup_" + subGroupId + ".xml";
+        File file = new File(fileName);
+        if (!file.exists()) return result;
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document doc = builder.parse(file);
+            NodeList msgNodes = doc.getElementsByTagName("message");
+            for (int i = 0; i < msgNodes.getLength(); i++) {
+                Element elem = (Element) msgNodes.item(i);
+                StoredMessage msg = new StoredMessage(
+                        Long.parseLong(elem.getAttribute("id")),
+                        elem.getAttribute("sender"),
+                        elem.getAttribute("receiver"),
+                        elem.getTextContent(),
+                        MessageType.valueOf(elem.getAttribute("type")),
+                        LocalDateTime.parse(elem.getAttribute("timestamp"), TIMESTAMP_FORMAT)
+                );
+                result.add(msg);
+            }
+            result.sort(Comparator.comparing(StoredMessage::getTimestamp));
+            if (limit > 0 && result.size() > limit) {
+                return result.subList(Math.max(0, result.size() - limit), result.size());
+            }
+        } catch (Exception e) {
+            System.out.println("小组消息读取失败: " + e.getMessage());
+        }
+        return result;
     }
 
     /**
@@ -185,7 +248,7 @@ public class MessageStorage {
             userMessageCache.computeIfAbsent(message.getReceiver(), k -> new ArrayList<>()).add(message);
         } else {
             // 群聊消息，添加到所有在线用户的缓存（这里简化处理）
-            // 实际应用中可能需要维护群组成员列表
+            // 实际应用中可能需要维护���组成员列表
         }
     }
 
@@ -488,8 +551,7 @@ public class MessageStorage {
      * 消息类型枚举
      */
     public enum MessageType {
-        GROUP, // 群聊消息
-        PRIVATE // 私聊消息
+        PRIVATE, GROUP, PUBLIC, SUBGROUP // 新增SUBGROUP类型
     }
 
     /**

@@ -12,7 +12,10 @@ import com.chat.model.User;
 
 public class Server implements UserDatabase.UserDatabaseObserver {
     private static final int PORT = 8888;
+    public static final int IMAGE_PORT = 18989;
+    public static final int VOICE_PORT = 19999;
     private static ConcurrentHashMap<String, ClientHandler> clients = new ConcurrentHashMap<>();
+    private static ConcurrentHashMap<String, ClientHandler.VoiceSocketHandler> voiceClients = new ConcurrentHashMap<>();
     private static ExecutorService threadPool;
     private static Server serverInstance = new Server();
 
@@ -37,11 +40,38 @@ public class Server implements UserDatabase.UserDatabaseObserver {
     }
 
     public static void main(String[] args) throws IOException {
-        ServerSocket serverSocket = new ServerSocket(PORT);
+        ServerSocket serverSocket = new ServerSocket(PORT, 50, InetAddress.getByName("0.0.0.0"));
+        ServerSocket imageSocket = new ServerSocket(IMAGE_PORT, 50, InetAddress.getByName("0.0.0.0"));
+        ServerSocket voiceSocket = new ServerSocket(VOICE_PORT, 50, InetAddress.getByName("0.0.0.0"));
         System.out.println("服务器已启动，等待客户端连接...");
         // 创建文件存储目录
         new File("files/groups/").mkdirs();
         new File("files/private/").mkdirs();
+        new File("files/images/").mkdirs();
+        // 启动图片端口监听线程
+        new Thread(() -> {
+            while (true) {
+                try {
+                    Socket imgSock = imageSocket.accept();
+                    threadPool.execute(new ClientHandler.ImageSocketHandler(imgSock));
+                } catch (IOException e) {
+                    System.out.println("图片端口监听异常: " + e.getMessage());
+                }
+            }
+        }, "ImagePortListener").start();
+        // 启动语音端口监听线程
+        new Thread(() -> {
+            while (true) {
+                try {
+                    Socket vSock = voiceSocket.accept();
+                    ClientHandler.VoiceSocketHandler handler = new ClientHandler.VoiceSocketHandler(vSock);
+                    threadPool.execute(handler);
+                } catch (IOException e) {
+                    System.out.println("语音端口监听异常: " + e.getMessage());
+                }
+            }
+        }, "VoicePortListener").start();
+        // 主消息端口监听
         while (true) {
             Socket socket = serverSocket.accept();
             threadPool.execute(new ClientHandler(socket));
@@ -120,6 +150,17 @@ public class Server implements UserDatabase.UserDatabaseObserver {
                 handler.send("[群聊] " + groupName + "|" + sender + ": " + message);
             }
         }
+    }
+
+    // 新增：注册/注销语音socket
+    public static void registerVoiceClient(String username, ClientHandler.VoiceSocketHandler handler) {
+        voiceClients.put(username, handler);
+    }
+    public static void unregisterVoiceClient(String username) {
+        voiceClients.remove(username);
+    }
+    public static ClientHandler.VoiceSocketHandler getVoiceClient(String username) {
+        return voiceClients.get(username);
     }
 
     // 可扩展的消息分发接口

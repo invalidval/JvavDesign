@@ -2,22 +2,27 @@ package com.chat.ui;
 
 import com.chat.client.Client;
 import com.chat.client.MessageObserver;
-import com.chat.file.FileTransferListener;
-import com.chat.file.FileTransferManager;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import javax.xml.parsers.DocumentBuilderFactory;
+import org.w3c.dom.*;
 
 public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
     private JFrame frame ;
     private JPanel loginPanel;
     private Client client;
     private String currentUser;
+    private String serverIp = "127.0.0.1"; // 默认服务器IP
+    private int serverPort = 8888;
 
     // 主界面相关
     private JPanel mainPanel;
@@ -34,6 +39,29 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
 
     // 聊天窗口最大数量设置
     private int maxChatWindows = 5;
+
+    // 新增：未读图片消息队列，key=会话名，value=图片消息列表
+    private Map<String, List<ImageMsg>> unreadImages = new ConcurrentHashMap<>();
+    // 图片消息结构体
+    public static class ImageMsg {
+        public String sender;
+        public String fileName;
+        public String imagePath;
+        public boolean isGroup;
+        public ImageMsg(String sender, String fileName, String imagePath, boolean isGroup) {
+            this.sender = sender;
+            this.fileName = fileName;
+            this.imagePath = imagePath;
+            this.isGroup = isGroup;
+        }
+    }
+    // 提供给UI调用：获取并清除未读图片消息
+    public List<ImageMsg> pollUnreadImages(String session, boolean isGroup) {
+        String key = session;
+        List<ImageMsg> list = unreadImages.getOrDefault(key, new ArrayList<>());
+        unreadImages.remove(key);
+        return list;
+    }
 
     // 背景面板内部类
     class BackgroundPanel extends JPanel {
@@ -57,10 +85,42 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
     }
 
     public ChatApp() {
-        frame = new JFrame("线上聊天室 Designed by 2023211310班 我们6个");
+        loadServerConfig();
+        String title = "线上聊天室";
+        try {
+            File xmlFile = new File("config/foo.xml");
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            Document doc = dbf.newDocumentBuilder().parse(xmlFile);
+            NodeList list = doc.getElementsByTagName("sentence");
+            if (list.getLength() > 0) {
+                int idx = new Random().nextInt(list.getLength());
+                String randomSentence = list.item(idx).getTextContent();
+                title = title + " - " + randomSentence;
+            }
+        } catch (Exception e) {
+            // 读取失败则用默认标题
+            title = "你的医生呢？放弃治疗了？" + e.toString();
+        }
+        frame = new JFrame(title);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(700, 500);
         frame.setLayout(new CardLayout());
+
+
+        // 添加窗口关闭监听，释放资源
+        frame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                if (client != null) {
+
+                    client.sendMessage("/logout"); // 发送登出指令
+                    client.stopListening();
+                    client.removeObserver(ChatApp.this);
+
+                }
+                // 可添加其他清理操作
+            }
+        });
 
         createLoginPanel();
 
@@ -69,8 +129,19 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
         frame.setVisible(true);
     }
 
+    private void loadServerConfig() {
+        try {
+            Properties props = new Properties();
+            props.load(new FileInputStream("config/client.properties"));
+            serverIp = props.getProperty("serverIp", serverIp);
+            String portStr = props.getProperty("serverPort");
+            if (portStr != null) serverPort = Integer.parseInt(portStr);
+        } catch (Exception e) {
+            // 配置文件不存在或读取失败，使用默认值
+        }
+    }
+
     private void createLoginPanel() {
-        // loginPanel = new JPanel(new GridBagLayout());
         loginPanel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(10, 10, 10, 10);
@@ -111,8 +182,15 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
             String username = usernameField.getText().trim();
             String password = new String(passwordField.getPassword()).trim();
             if (!username.isEmpty() && !password.isEmpty()) {
-                client.sendMessage("/l " + username + " " + password);
-                currentUser = username;
+                try {
+                    client = new Client(serverIp, serverPort);
+                    client.addObserver(this);
+                    client.startListening();
+                    client.sendMessage("/l " + username + " " + password);
+                    currentUser = username;
+                } catch (IOException ex) {
+                    JOptionPane.showMessageDialog(frame, "无法连接到服务器：" + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                }
             } else {
                 JOptionPane.showMessageDialog(frame, "用户名和密码不能为空！", "错误", JOptionPane.ERROR_MESSAGE);
             }
@@ -122,7 +200,14 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
             String username = usernameField.getText().trim();
             String password = new String(passwordField.getPassword()).trim();
             if (!username.isEmpty() && !password.isEmpty()) {
-                client.sendMessage("/r " + username + " " + password);
+                try {
+                    client = new Client(serverIp, serverPort);
+                    client.addObserver(this);
+                    client.startListening();
+                    client.sendMessage("/r " + username + " " + password);
+                } catch (IOException ex) {
+                    JOptionPane.showMessageDialog(frame, "无法连接到服务器：" + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+                }
             } else {
                 JOptionPane.showMessageDialog(frame, "用户名和密码不能为空！", "错误", JOptionPane.ERROR_MESSAGE);
             }
@@ -179,6 +264,9 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
                     if (messageListPanel != null) messageListPanel.refresh();
                 }
             }
+        } else if (message.startsWith("SG_LIST:")) {
+            // 新增：小组列表信息分发到群聊UI
+            if (groupUI != null) groupUI.onMessageReceived(message);
         } else if (message.startsWith("SYSTEM:")) {
             int statusCodeStart = message.lastIndexOf("[");
             int statusCodeEnd = message.lastIndexOf("]");
@@ -202,6 +290,149 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
             } else {
                 if (friendsUI != null) friendsUI.onMessageReceived(message);
             }
+        } else if (message.startsWith("IMAGE_NOTIFY:")) {
+            // 图片通知分发到好友UI和群聊UI，并在消息栏提示
+            String[] parts = message.split(":");
+            if (parts.length >= 6 && "group".equals(parts[5])) {
+                // 群聊图片
+                if (groupUI != null) groupUI.onMessageReceived(message);
+                String imagePath = parts[4];
+                String sender = parts[3];
+                String groupName = null;
+                if (groupUI != null) {
+                    java.util.List<String> myGroups = null;
+                    try {
+                        java.lang.reflect.Field myGroupsField = groupUI.getClass().getDeclaredField("myGroups");
+                        myGroupsField.setAccessible(true);
+                        myGroups = (java.util.List<String>) myGroupsField.get(groupUI);
+                    } catch (Exception ex) {}
+                    if (myGroups != null) {
+                        for (String g : myGroups) {
+                            if (imagePath.contains(g)) {
+                                groupName = g;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (groupName == null) groupName = "未知群聊";
+                // 存储未读图片消息
+                unreadImages.computeIfAbsent(groupName, k -> new ArrayList<>())
+                    .add(new ImageMsg(sender, parts[1], imagePath, true));
+                sessionLastMsg.put(groupName, sender + ": [图片]");
+                sessionIsGroup.put(groupName, true);
+                if (messageListPanel != null) messageListPanel.refresh();
+            } else if (parts.length >= 5) {
+                // 私聊图片
+                if (friendsUI != null) friendsUI.onMessageReceived(message);
+                String sender = parts[3];
+                String imagePath = parts[4];
+                unreadImages.computeIfAbsent(sender, k -> new ArrayList<>())
+                    .add(new ImageMsg(sender, parts[1], imagePath, false));
+                sessionLastMsg.put(sender, sender + ": [图片]");
+                sessionIsGroup.put(sender, false);
+                if (messageListPanel != null) messageListPanel.refresh();
+            }
+        } else if (message.startsWith("SYSTEM: 你被邀请加入群")) {
+            // 自动弹窗，解析群名和小组ID，并显示同意/拒绝按钮
+            String groupName = null, subGroupId = null, inviter = null;
+            try {
+                int idx1 = message.indexOf("群[");
+                int idx2 = message.indexOf("]的小组");
+                if (idx1 != -1 && idx2 != -1) {
+                    groupName = message.substring(idx1 + 2, idx2);
+                }
+                int idIdx = message.indexOf("ID=");
+                int idEnd = message.indexOf("，", idIdx);
+                if (idIdx != -1) {
+                    if (idEnd != -1) {
+                        subGroupId = message.substring(idIdx + 3, idEnd);
+                    } else {
+                        subGroupId = message.substring(idIdx + 3).replaceAll("[^a-zA-Z0-9\\-]", "");
+                    }
+                }
+                // 新增：解析邀请人
+                int inviterIdx = message.indexOf("邀请人:");
+                if (inviterIdx != -1) {
+                    int end = message.indexOf(" ", inviterIdx + 4);
+                    if (end == -1) end = message.length();
+                    inviter = message.substring(inviterIdx + 4, end).trim();
+                }
+            } catch (Exception ex) {}
+            // 构造带按钮的面板
+            JPanel panel = new JPanel(new BorderLayout());
+            StringBuilder msgBuilder = new StringBuilder(message);
+            if (inviter != null) {
+                msgBuilder.append("\n邀请人: ").append(inviter);
+            }
+            JLabel msgLabel = new JLabel("<html>" + msgBuilder.toString().replace("\n", "<br>") + "</html>");
+            panel.add(msgLabel, BorderLayout.CENTER);
+            JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+            JButton acceptBtn = new JButton("同意");
+            JButton rejectBtn = new JButton("拒绝");
+            btnPanel.add(acceptBtn);
+            btnPanel.add(rejectBtn);
+            panel.add(btnPanel, BorderLayout.SOUTH);
+            JDialog dialog = new JDialog(frame, "小组邀请", true);
+            dialog.setContentPane(panel);
+            dialog.setSize(400, 180);
+            dialog.setLocationRelativeTo(frame);
+            final String finalGroupName = groupName;
+            final String finalSubGroupId = subGroupId;
+            acceptBtn.addActionListener(e -> {
+                if (finalGroupName != null && finalSubGroupId != null) {
+                    client.sendMessage("/sg_accept " + finalGroupName + " " + finalSubGroupId);
+                }
+                dialog.dispose();
+            });
+            rejectBtn.addActionListener(e -> {
+                // 可扩展：发送拒绝命令到服务器
+                dialog.dispose();
+            });
+            dialog.setVisible(true);
+        } else if (message.startsWith("SG_INVITE_NOTIFY:")) {
+            // SG_INVITE_NOTIFY:群名:小组ID:邀请人
+            String[] parts = message.split(":");
+            if (parts.length >= 4) {
+                String groupName = parts[1];
+                String subGroupId = parts[2];
+                String inviter = parts[3];
+                JPanel panel = new JPanel(new BorderLayout());
+                JLabel msgLabel = new JLabel("<html>你被邀请加入群 <b>" + groupName + "</b> 的小组<br>小组ID: <b>" + subGroupId + "</b><br>邀请人: <b>" + inviter + "</b></html>");
+                panel.add(msgLabel, BorderLayout.CENTER);
+                JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+                JButton acceptBtn = new JButton("同意");
+                JButton rejectBtn = new JButton("拒绝");
+                btnPanel.add(acceptBtn);
+                btnPanel.add(rejectBtn);
+                panel.add(btnPanel, BorderLayout.SOUTH);
+                JDialog dialog = new JDialog(frame, "小组邀请", true);
+                dialog.setContentPane(panel);
+                dialog.setSize(400, 180);
+                dialog.setLocationRelativeTo(frame);
+                acceptBtn.addActionListener(e -> {
+                    client.sendMessage("/sg_accept " + groupName + " " + subGroupId);
+                    dialog.dispose();
+                });
+                rejectBtn.addActionListener(e -> {
+                    dialog.dispose();
+                });
+                dialog.setVisible(true);
+            }
+        } else if (message.startsWith("VOICE_INVITE_FROM:")) {
+            // 语音通话邀请
+            String inviter = message.substring("VOICE_INVITE_FROM:".length());
+            int result = JOptionPane.showConfirmDialog(frame, inviter + " 邀请你语音通话，是否同意？", "语音通话邀请", JOptionPane.YES_NO_OPTION);
+            if (result == JOptionPane.YES_OPTION) {
+                client.sendMessage("/voice_accept " + inviter);
+            }
+        } else if (message.startsWith("VOICE_ACCEPTED_BY:")) {
+            // 对方同意语音通话
+            String accepter = message.substring("VOICE_ACCEPTED_BY:".length());
+            JOptionPane.showMessageDialog(frame, accepter + " 已同意语音通话，现在可以开始通话。");
+            // 通知好友UI建立语音会话
+            if (friendsUI != null) friendsUI.onVoiceCallAccepted(accepter);
+
         }
     }
 
@@ -256,7 +487,7 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
 
             // 登出按钮逻辑
             logoutBtn.addActionListener(e -> {
-                int confirm = JOptionPane.showConfirmDialog(frame, "确定要登出吗？", "登出确认", JOptionPane.YES_NO_OPTION);
+                int confirm = JOptionPane.showConfirmDialog(frame, "确定要登出吗��", "登出确认", JOptionPane.YES_NO_OPTION);
                 if (confirm == JOptionPane.YES_OPTION) {
                     doLogout(true);
                 }
@@ -295,14 +526,15 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
 
     public void start() {
         try {
-            client = new Client("localhost", 8888);
-            client.addObserver(this); // 确保只注册一次
+            client = new Client(serverIp, serverPort);
+            client.addObserver(this); // 确保��注册一次
             client.startListening();
         } catch (IOException e) {
             JOptionPane.showMessageDialog(frame, "无法连接到服务器：" + e.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
             System.exit(1);
         }
     }
+
 
     // 消息列表面板
     class MessageListPanel extends JPanel {
@@ -390,7 +622,7 @@ public class ChatApp implements MessageObserver, ChatWindowLimitProvider {
                     client.sendMessage("/logout");
                 }
                 client.stopListening();
-                client = new Client("localhost", 8888);
+                client = new Client(serverIp, serverPort);
                 client.addObserver(this);
                 client.startListening();
             }

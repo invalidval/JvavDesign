@@ -21,6 +21,14 @@ public class ChatUIHistory implements MessageObserver {
         createHistoryPanel();
     }
 
+    // 新增：支持作为弹窗，自动填充查询参数
+    public ChatUIHistory(Client client, JFrame parentFrame, String currentUser, String type, String targetName) {
+        this.client = client;
+        this.currentUser = currentUser;
+        client.addObserver(this);
+        createHistoryPanel(type, targetName);
+    }
+
     public JPanel getPanel() {
         return historyPanel;
     }
@@ -65,6 +73,42 @@ public class ChatUIHistory implements MessageObserver {
         historyPanel.add(scrollPane, BorderLayout.CENTER);
         historyPanel.add(queryPanel, BorderLayout.NORTH);
         historyPanel.add(instructionPanel, BorderLayout.SOUTH);
+    }
+
+    // 重载，支持参数
+    private void createHistoryPanel(String type, String targetName) {
+        historyPanel = new JPanel(new BorderLayout());
+        historyArea = new JTextArea();
+        historyArea.setEditable(false);
+        JScrollPane scrollPane = new JScrollPane(historyArea);
+
+        JPanel queryPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JLabel targetLabel = new JLabel(type.equals("private") ? "好友:" : "群聊:");
+        JTextField targetField = new JTextField(targetName, 10);
+        targetField.setEditable(false);
+        JLabel countLabel = new JLabel("条数:");
+        JComboBox<String> countBox = new JComboBox<>(new String[]{"10", "20", "50", "100"});
+        JButton queryButton = new JButton("查询");
+
+        queryButton.addActionListener(e -> {
+            String count = (String) countBox.getSelectedItem();
+            String cmd;
+            if (type.equals("private")) {
+                cmd = "/h " + targetName + " " + count;
+            } else {
+                cmd = "/hg " + targetName + " " + count;
+            }
+            client.sendMessage(cmd);
+        });
+
+        queryPanel.add(targetLabel);
+        queryPanel.add(targetField);
+        queryPanel.add(countLabel);
+        queryPanel.add(countBox);
+        queryPanel.add(queryButton);
+
+        historyPanel.add(scrollPane, BorderLayout.CENTER);
+        historyPanel.add(queryPanel, BorderLayout.NORTH);
     }
 
     @Override
