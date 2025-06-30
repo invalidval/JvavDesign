@@ -664,6 +664,9 @@ public class ChatUIFriends implements MessageObserver {
                     sender + " 发送了文件: " + fileName + "\n是否下载?",
                     "收到文件",
                     JOptionPane.YES_NO_OPTION);
+            FileRecord record = new FileRecord(fileId,fileName, fileSize, sender, currentUser, false,System.currentTimeMillis());
+            FileHistoryXmlManager.addRecord(currentUser, false, sender, record);
+            fileListPanel.refreshFileTable();
 
             if (option == JOptionPane.YES_OPTION) {
                 // 获取当前系统用户名

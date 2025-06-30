@@ -45,7 +45,12 @@
             <sgmember>64</sgmember>
         </subgroup>
     </group>
+<<<<<<< Updated upstream
     <group name="中央政治局">
+=======
+    <group name="310班级群">
+        <member>1</member>
+>>>>>>> Stashed changes
         <member>3</member>
         <member>1</member>
     </group>
