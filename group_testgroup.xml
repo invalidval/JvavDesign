@@ -27,4 +27,7 @@
   <message id="2321" receiver="testgroup" sender="1" timestamp="2025-06-29 21:03:50" type="GROUP">
     <content>1</content>
   </message>
+  <message id="2318" receiver="testgroup" sender="1" timestamp="2025-06-30 22:21:05" type="GROUP">
+    <content>1</content>
+  </message>
 </messages>
