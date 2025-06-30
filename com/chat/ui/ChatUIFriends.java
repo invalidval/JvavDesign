@@ -256,14 +256,12 @@ public class ChatUIFriends implements MessageObserver {
                 long fileSize = Long.parseLong(parts[2]);
                 String sender = parts[3];
                 String imagePath = parts[4];
-                // 本地化存储图片
+
                 String localImagePath = saveImageToLocal(sender, fileName, imagePath);
-                saveMessageToLocal(sender, "[图片] " + fileName + " " + localImagePath); // 保存图片消息到本地
+                saveMessageToLocal(sender, "[图片] " + fileName + " " + localImagePath ); // 保存图片消息到本地
                 PrivateChatWindow win = privateChats.get(sender);
-                if (win == null || !win.isDisplayable()) {
                     win = new PrivateChatWindow(sender);
                     privateChats.put(sender, win);
-                }
                 win.appendImageMessage(sender, fileName, localImagePath); // 用本地路径显示
             }
         } else if (message.startsWith("FILE_NOTIFY:")) {
@@ -338,7 +336,12 @@ public class ChatUIFriends implements MessageObserver {
         if (!dir.exists()) dir.mkdirs();
         File file = new File(dir, fileName);
         try (FileWriter fw = new FileWriter(file, true)) {
-            fw.write(message + "\n");
+            // 如果是图片消息，标记为 [图片] 格式
+            if (message.startsWith("[图片] ")) {
+                fw.write("[图片消息] " + message + "\n");
+            } else {
+                fw.write(message + "\n");
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -525,7 +528,7 @@ public class ChatUIFriends implements MessageObserver {
 
         // 加载本地聊天记录
         private void loadLocalChatHistory() {
-            String fileName = "chat_private_" + currentUser + "_" + friendName + ".txt";
+            String fileName = currentUser+"chat_private_" + currentUser + "_" + friendName + ".txt";
             File file = new File(System.getProperty("user.home") + File.separator + "ChatLocalHistory", fileName);
             if (file.exists()) {
                 try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(file))) {
@@ -595,7 +598,9 @@ public class ChatUIFriends implements MessageObserver {
                         int imagePort = 8889; // 与服务端保持一致
                         // 构造本地图片保存路径
                         String userHome = System.getProperty("user.home");
-                        String imagesDirPath = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "PrivateChat" + File.separator + currentUser + "_to_" + friendName;
+                        String imagesDirPath = userHome + File.separator + "ChatLocalHistory" +
+                                File.separator + "images" + File.separator + "PrivateChat" +
+                                File.separator + currentUser + "_to_" + friendName;
                         File imagesDir = new File(imagesDirPath);
                         if (!imagesDir.exists()) imagesDir.mkdirs();
                         File destFile = new File(imagesDir, file.getName());
@@ -640,7 +645,7 @@ public class ChatUIFriends implements MessageObserver {
 
         // 保存消息到本地文件
         private void saveMessageToLocal(String msg) {
-            String fileName = "chat_private_" + currentUser + "_" + friendName + ".txt";
+            String fileName = currentUser+"chat_private_" + currentUser + "_" + friendName + ".txt";
             File dir = new File(System.getProperty("user.home") + File.separator + "ChatLocalHistory");
             if (!dir.exists()) dir.mkdirs();
             File file = new File(dir, fileName);
@@ -701,64 +706,36 @@ public class ChatUIFriends implements MessageObserver {
         }
 
         // 聊天窗口插入图片消息（自动加载并显示图片缩略图，可点击查看大图）
-        public void appendImageMessage(String sender, String fileName, String imagePath) {
-            String tempDir = System.getProperty("java.io.tmpdir");
-            String localPath = tempDir + File.separator + fileName;
-            new Thread(() -> {
-                try {
-                    File imageFile = new File(imagePath);
-                    if (imageFile.exists()) {
-                        // 如果是本地图片��件直接显示
-                        displayImage(sender, fileName, imagePath);
-                    } else {
-                        // 从服务器下载图片
-                        try (Socket sock = new Socket(serverHost, 18989);
-                             DataOutputStream out = new DataOutputStream(sock.getOutputStream());
-                             DataInputStream in = new DataInputStream(sock.getInputStream())) {
-                            String cmd = "/IMAGE_DOWNLOAD " + fileName + " " + sender + " " + currentUser;
-                            out.writeUTF(cmd);
-                            out.flush();
-                            String resp = in.readUTF();
-                            if (!"IMAGE_DATA".equals(resp)) {
-                                SwingUtilities.invokeLater(() -> appendMessage("[图片下载失败: " + resp + "]"));
-                                return;
-                            }
-                            String recvFileName = in.readUTF();
-                            long recvFileSize = in.readLong();
-                            try (FileOutputStream fos = new FileOutputStream(localPath)) {
-                                byte[] buffer = new byte[8192];
-                                long remain = recvFileSize;
-                                while (remain > 0) {
-                                    int read = in.read(buffer, 0, (int)Math.min(buffer.length, remain));
-                                    if (read == -1) break;
-                                    fos.write(buffer, 0, read);
-                                    remain -= read;
-                                }
-                            }
-                            displayImage(sender, fileName, localPath);
-                        }
-                    }
-                } catch (Exception ex) {
-                    SwingUtilities.invokeLater(() -> appendMessage("[图片加载失败: " + ex.getMessage() + "]"));
-                }
-            }).start();
-        }
+        // 在你的窗口类中添加如下字段
+        private final Map<Integer, String> imageOffsetMap = new HashMap<>();
+        private boolean imageMouseListenerAdded = false;
 
-        private void displayImage(String sender, String fileName, String imagePath) {
+        // 重写图片消息插入与预览方法
+        public void appendImageMessage(String sender, String fileName, String imagePath) {
             SwingUtilities.invokeLater(() -> {
                 try {
+                    String time = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
                     javax.swing.text.StyledDocument doc = chatArea.getStyledDocument();
-                    doc.insertString(doc.getLength(), sender + " 发送了图片: ", null);
-                    ImageIcon icon = new ImageIcon(imagePath);
-                    if (icon.getIconWidth() <= 0 || icon.getIconHeight() <= 0) {
-                        doc.insertString(doc.getLength(), "[图片加���失败]\n", null);
+                    doc.insertString(doc.getLength(), "[" + time + "] " + sender + " 发送了图片: ", null);
+
+                    // 检查图片路径是否有效
+                    File imageFile = new File(imagePath);
+                    if (!imageFile.exists() || !imageFile.isFile()) {
+                        doc.insertString(doc.getLength(), "[图片文件不存在或路径无效]\n", null);
                         return;
                     }
-                    // 动态缩略图最大边长，取chatArea宽度的1/3，���小100，最大300
+
+                    ImageIcon icon = new ImageIcon(imagePath);
+                    if (icon.getIconWidth() <= 0 || icon.getIconHeight() <= 0) {
+                        doc.insertString(doc.getLength(), "[图片加载失败]\n", null);
+                        return;
+                    }
+
                     int chatWidth = chatArea.getWidth() > 0 ? chatArea.getWidth() : 300;
                     int maxThumb = Math.max(100, Math.min(300, chatWidth / 3));
                     int width = icon.getIconWidth();
                     int height = icon.getIconHeight();
+
                     int newW = width, newH = height;
                     if (width > height && width > maxThumb) {
                         newW = maxThumb;
@@ -767,66 +744,67 @@ public class ChatUIFriends implements MessageObserver {
                         newH = maxThumb;
                         newW = (int) ((double) width / height * maxThumb);
                     }
+
                     Image img = icon.getImage().getScaledInstance(newW, newH, Image.SCALE_SMOOTH);
                     ImageIcon thumbIcon = new ImageIcon(img);
                     javax.swing.text.Style style = chatArea.addStyle("imageStyle" + System.nanoTime(), null);
                     javax.swing.text.StyleConstants.setIcon(style, thumbIcon);
                     int insertPos = doc.getLength();
                     doc.insertString(insertPos, "ignored", style);
+                    imageOffsetMap.put(insertPos, imagePath);
                     doc.insertString(doc.getLength(), "\n", null);
                     chatArea.setCaretPosition(doc.getLength());
-                    // 支持点击预览大图（自适应弹窗）
-                    chatArea.addMouseListener(new java.awt.event.MouseAdapter() {
-                        public void mouseClicked(java.awt.event.MouseEvent evt) {
-                            int pos = chatArea.viewToModel2D(evt.getPoint());
-                            if (pos == insertPos) {
-                                JDialog dialog = new JDialog(PrivateChatWindow.this, "图片预览", true);
-                                JLabel bigLabel = new JLabel();
-                                JScrollPane pane = new JScrollPane(bigLabel);
-                                dialog.setContentPane(pane);
-                                dialog.setSize(600, 600);
-                                dialog.setLocationRelativeTo(PrivateChatWindow.this);
-                                Runnable updateImage = () -> {
-                                    int w = pane.getViewport().getWidth();
-                                    int h = pane.getViewport().getHeight();
-                                    if (w <= 0 || h <= 0) return;
-                                    ImageIcon bigIcon = new ImageIcon(imagePath);
-                                    int imgW = bigIcon.getIconWidth();
-                                    int imgH = bigIcon.getIconHeight();
-                                    int showW = imgW, showH = imgH;
-                                    if (imgW > w || imgH > h) {
-                                        double scale = Math.min((double) w / imgW, (double) h / imgH);
-                                        showW = (int) (imgW * scale);
-                                        showH = (int) (imgH * scale);
-                                    }
-                                    Image scaled = bigIcon.getImage().getScaledInstance(showW, showH, Image.SCALE_SMOOTH);
-                                    bigLabel.setIcon(new ImageIcon(scaled));
-                                };
-                                pane.addComponentListener(new java.awt.event.ComponentAdapter() {
-                                    public void componentResized(java.awt.event.ComponentEvent e) {
+
+                    if (!imageMouseListenerAdded) {
+                        chatArea.addMouseListener(new java.awt.event.MouseAdapter() {
+                            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                                int pos = chatArea.viewToModel2D(evt.getPoint());
+                                for (Map.Entry<Integer, String> entry : imageOffsetMap.entrySet()) {
+                                    int offset = entry.getKey();
+                                    if (pos == offset) {
+                                        String imgPath = entry.getValue();
+                                        JDialog dialog = new JDialog((JFrame) SwingUtilities.getWindowAncestor(chatArea), "图片预览", true);
+                                        JLabel bigLabel = new JLabel();
+                                        JScrollPane pane = new JScrollPane(bigLabel);
+                                        dialog.setContentPane(pane);
+                                        dialog.setSize(600, 600);
+                                        dialog.setLocationRelativeTo(chatArea);
+                                        Runnable updateImage = () -> {
+                                            int w = pane.getViewport().getWidth();
+                                            int h = pane.getViewport().getHeight();
+                                            if (w <= 0 || h <= 0) return;
+                                            ImageIcon bigIcon = new ImageIcon(imgPath);
+                                            int imgW = bigIcon.getIconWidth();
+                                            int imgH = bigIcon.getIconHeight();
+                                            int showW = imgW, showH = imgH;
+                                            if (imgW > w || imgH > h) {
+                                                double scale = Math.min((double) w / imgW, (double) h / imgH);
+                                                showW = (int) (imgW * scale);
+                                                showH = (int) (imgH * scale);
+                                            }
+                                            Image scaled = bigIcon.getImage().getScaledInstance(showW, showH, Image.SCALE_SMOOTH);
+                                            bigLabel.setIcon(new ImageIcon(scaled));
+                                        };
+                                        pane.addComponentListener(new java.awt.event.ComponentAdapter() {
+                                            public void componentResized(java.awt.event.ComponentEvent e) {
+                                                updateImage.run();
+                                            }
+                                        });
                                         updateImage.run();
+                                        dialog.setVisible(true);
                                     }
-                                });
-                                dialog.addComponentListener(new java.awt.event.ComponentAdapter() {
-                                    public void componentResized(java.awt.event.ComponentEvent e) {
-                                        updateImage.run();
-                                    }
-                                });
-                                updateImage.run();
-                                dialog.setVisible(true);
+                                }
                             }
-                        }
-                    });
-                } catch (Exception e) {
-                    try {
-                        javax.swing.text.Document doc = chatArea.getDocument();
-                        doc.insertString(doc.getLength(), "[图片显示失败]\n", null);
-                    } catch (javax.swing.text.BadLocationException ex) {
-                        ex.printStackTrace();
+                        });
+                        imageMouseListenerAdded = true;
                     }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
             });
         }
+
+
 
         // 新增：启动语音通话
         private void startVoiceCall() {
@@ -893,7 +871,7 @@ public class ChatUIFriends implements MessageObserver {
     // 工具方法：将图片复制到本地目录
     private String saveImageToLocal(String sender, String fileName, String imagePath) {
         String userHome = System.getProperty("user.home");
-        String localDirPath = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "PrivateChat" + File.separator + sender + "_to_" + currentUser;
+        String localDirPath = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "PrivateChat" + File.separator + currentUser +File.separator + "_to_" + currentUser;
         File localDir = new File(localDirPath);
         if (!localDir.exists()) localDir.mkdirs();
         File src = new File(imagePath);

@@ -296,14 +296,18 @@ public class SubGroupUI {
         public void appendImageMessage(String sender, String fileName, String imagePath) {
             SwingUtilities.invokeLater(() -> {
                 try {
-                    String time = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
+                    // 1. 显示发送图片的时间和发送者
+                    String time = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format
+                            (new java.util.Date());
                     javax.swing.text.StyledDocument doc = chatArea.getStyledDocument();
                     doc.insertString(doc.getLength(), "[" + time + "] " + sender + " 发送了图片: ", null);
+                    // 2. 加载原始图片
                     ImageIcon icon = new ImageIcon(imagePath);
                     if (icon.getIconWidth() <= 0 || icon.getIconHeight() <= 0) {
                         doc.insertString(doc.getLength(), "[图片加载失败]\n", null);
                         return;
                     }
+                    // 3. 计算缩略图尺寸（最大边不超过maxThumb）
                     int chatWidth = chatArea.getWidth() > 0 ? chatArea.getWidth() : 300;
                     int maxThumb = Math.max(100, Math.min(300, chatWidth / 3));
                     int width = icon.getIconWidth();
@@ -316,6 +320,7 @@ public class SubGroupUI {
                         newH = maxThumb;
                         newW = (int) ((double) width / height * maxThumb);
                     }
+                    // 4. 生成缩略图并插入到聊天区
                     Image img = icon.getImage().getScaledInstance(newW, newH, Image.SCALE_SMOOTH);
                     ImageIcon thumbIcon = new ImageIcon(img);
                     javax.swing.text.Style style = chatArea.addStyle("imageStyle" + System.nanoTime(), null);
@@ -325,6 +330,7 @@ public class SubGroupUI {
                     imageOffsetMap.put(insertPos, imagePath);
                     doc.insertString(doc.getLength(), "\n", null);
                     chatArea.setCaretPosition(doc.getLength());
+                    // 5. 只添加一次鼠标监听器，实现点击图片预览大图
                     if (!imageMouseListenerAdded) {
                         chatArea.addMouseListener(new java.awt.event.MouseAdapter() {
                             public void mouseClicked(java.awt.event.MouseEvent evt) {
@@ -333,12 +339,14 @@ public class SubGroupUI {
                                     int offset = entry.getKey();
                                     if (pos == offset) {
                                         String imgPath = entry.getValue();
+                                        // 弹出对话框显示大图
                                         JDialog dialog = new JDialog(SubGroupChatWindow.this, "图片预览", true);
                                         JLabel bigLabel = new JLabel();
                                         JScrollPane pane = new JScrollPane(bigLabel);
                                         dialog.setContentPane(pane);
                                         dialog.setSize(600, 600);
                                         dialog.setLocationRelativeTo(SubGroupChatWindow.this);
+                                        // 预览窗口自适应缩放图片
                                         Runnable updateImage = () -> {
                                             int w = pane.getViewport().getWidth();
                                             int h = pane.getViewport().getHeight();
@@ -355,6 +363,7 @@ public class SubGroupUI {
                                             Image scaled = bigIcon.getImage().getScaledInstance(showW, showH, Image.SCALE_SMOOTH);
                                             bigLabel.setIcon(new ImageIcon(scaled));
                                         };
+                                        // 监听窗口和滚动面��大小变化，动态缩放图片
                                         pane.addComponentListener(new java.awt.event.ComponentAdapter() {
                                             public void componentResized(java.awt.event.ComponentEvent e) {
                                                 updateImage.run();
@@ -365,7 +374,7 @@ public class SubGroupUI {
                                                 updateImage.run();
                                             }
                                         });
-                                        updateImage.run();
+                                        updateImage.run(); // 初始显示
                                         dialog.setVisible(true);
                                         break;
                                     }
@@ -403,7 +412,8 @@ public class SubGroupUI {
         // 加载本���小组聊天历史
         private void loadLocalSubGroupChatHistory() {
             String fileName = "chat_subgroup_" + groupName + "_" + subGroupId + ".txt";
-            File file = new File(System.getProperty("user.home") + File.separator + "ChatLocalHistory", fileName);
+            File file = new File(System.getProperty("user.home") + File.separator
+                    + "ChatLocalHistory", fileName);
             if (file.exists()) {
                 try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(file))) {
                     String line;
