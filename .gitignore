@@ -2,3 +2,4 @@ out/
 files/
 config/client.properties
 target/
+target

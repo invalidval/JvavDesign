@@ -163,6 +163,18 @@ public class Server implements UserDatabase.UserDatabaseObserver {
         return voiceClients.get(username);
     }
 
+    // 群聊语音分发（可用于后续扩展）
+    // public static void sendGroupVoiceMessage(String groupName, byte[] audioData) {
+    //     Set<String> members = GroupDatabase.getGroupMembers(groupName);
+    //     if (members == null) return;
+    //     for (String member : members) {
+    //         ClientHandler.VoiceSocketHandler handler = voiceClients.get(member);
+    //         if (handler != null) {
+    //             handler.sendAudio("group_" + groupName, audioData);
+    //         }
+    //     }
+    // }
+
     // 可扩展的消息分发接口
     public interface MessageDispatcher {
         void dispatch(String msg);

@@ -15,4 +15,16 @@
   <message id="2316" receiver="testgroup" sender="1" timestamp="2025-06-27 22:47:00" type="GROUP">
     <content>2</content>
   </message>
+  <message id="2318" receiver="testgroup" sender="3" timestamp="2025-06-29 21:03:33" type="GROUP">
+    <content>？</content>
+  </message>
+  <message id="2319" receiver="testgroup" sender="3" timestamp="2025-06-29 21:03:35" type="GROUP">
+    <content>的</content>
+  </message>
+  <message id="2320" receiver="testgroup" sender="3" timestamp="2025-06-29 21:03:36" type="GROUP">
+    <content>是</content>
+  </message>
+  <message id="2321" receiver="testgroup" sender="1" timestamp="2025-06-29 21:03:50" type="GROUP">
+    <content>1</content>
+  </message>
 </messages>
