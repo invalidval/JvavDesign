@@ -331,19 +331,17 @@ public class ChatUIFriends implements MessageObserver {
 
 
     private void saveMessageToLocal(String sender, String message) {
-        String fileName = "chat_private_" + currentUser + "_" + sender + ".txt";
-        File dir = new File(System.getProperty("user.home") + File.separator + "ChatLocalHistory");
+        // 修改文本消息保存路径，统一到 "ChatLocalHistory/messages/"
+        String fileName = currentUser + sender + ".txt";
+        File dir = new File(System.getProperty("user.home") + File.separator + "ChatLocalHistory" + File.separator + "messages");
         if (!dir.exists()) dir.mkdirs();
         File file = new File(dir, fileName);
-        try (FileWriter fw = new FileWriter(file, true)) {
-            // 如果是图片消息，标记为 [图片] 格式
-            if (message.startsWith("[图片] ")) {
-                fw.write("[图片消息] " + message + "\n");
-            } else {
-                fw.write(message + "\n");
-            }
+        try (java.io.FileWriter fw = new java.io.FileWriter(file, true)) {
+            // 格式: [时间] 发送方: 消息内容
+            String timestamp = "[" + java.time.LocalDateTime.now().toString() + "] ";
+            fw.write(timestamp + sender + ": " + message + "\n");
         } catch (Exception e) {
-            e.printStackTrace();
+            // 忽略写入异常
         }
     }
     public void onVoiceCallAccepted(String accepter) {
@@ -528,7 +526,7 @@ public class ChatUIFriends implements MessageObserver {
 
         // 加载本地聊天记录
         private void loadLocalChatHistory() {
-            String fileName = currentUser+"chat_private_" + currentUser + "_" + friendName + ".txt";
+            String fileName = currentUser+ friendName + ".txt";
             File file = new File(System.getProperty("user.home") + File.separator + "ChatLocalHistory", fileName);
             if (file.exists()) {
                 try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(file))) {
@@ -564,7 +562,7 @@ public class ChatUIFriends implements MessageObserver {
         // 新增：加载本地图片（打开窗口时自动加载）
         private void loadLocalImages() {
             String userHome = System.getProperty("user.home");
-            String localDirPath = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "PrivateChat" + File.separator + currentUser + "_to_" + friendName;
+            String localDirPath = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "PrivateChat" + File.separator +friendName + "_to_" + currentUser;
             File localDir = new File(localDirPath);
             if (localDir.exists() && localDir.isDirectory()) {
                 File[] images = localDir.listFiles((dir, name) -> name.matches(".*\\.(jpg|jpeg|png|gif|bmp)$"));
@@ -645,12 +643,14 @@ public class ChatUIFriends implements MessageObserver {
 
         // 保存消息到本地文件
         private void saveMessageToLocal(String msg) {
-            String fileName = currentUser+"chat_private_" + currentUser + "_" + friendName + ".txt";
+            String fileName = currentUser + friendName + ".txt";
             File dir = new File(System.getProperty("user.home") + File.separator + "ChatLocalHistory");
             if (!dir.exists()) dir.mkdirs();
             File file = new File(dir, fileName);
             try (java.io.FileWriter fw = new java.io.FileWriter(file, true)) {
-                fw.write(msg + "\n");
+                // 格式: [时间] 当前用户: 消息内容
+                String timestamp = "[" + java.time.LocalDateTime.now().toString() + "] ";
+                fw.write(timestamp + currentUser + ": " + msg + "\n");
             } catch (Exception e) {
                 // 忽略写入异常
             }
@@ -871,7 +871,7 @@ public class ChatUIFriends implements MessageObserver {
     // 工具方法：将图片复制到本地目录
     private String saveImageToLocal(String sender, String fileName, String imagePath) {
         String userHome = System.getProperty("user.home");
-        String localDirPath = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "PrivateChat" + File.separator + currentUser +File.separator + "_to_" + currentUser;
+        String localDirPath = userHome + File.separator + "ChatLocalHistory" + File.separator + "images" + File.separator + "PrivateChat" + File.separator + currentUser + File.separator + "_to_" + sender;
         File localDir = new File(localDirPath);
         if (!localDir.exists()) localDir.mkdirs();
         File src = new File(imagePath);
