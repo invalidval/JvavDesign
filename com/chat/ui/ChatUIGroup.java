@@ -797,6 +797,9 @@ public class ChatUIGroup implements MessageObserver {
                     sender + " 发送了文件: " + fileName + "\n是否下载?",
                     "收到群文件",
                     JOptionPane.YES_NO_OPTION);
+            FileRecord record = new FileRecord(fileId,fileName, fileSize,groupName , currentUser, true, System.currentTimeMillis());
+            FileHistoryXmlManager.addRecord(currentUser, true, groupName, record);
+            fileListPanel.refreshFileTable();
             if (option == JOptionPane.YES_OPTION) {
                 String docPath = System.getProperty("user.home") + File.separator + "Documents" + File.separator + "ChatFiles" + File.separator + currentUser + File.separator + groupName;
                 File groupDir = new File(docPath);
